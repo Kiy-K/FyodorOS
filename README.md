@@ -1,4 +1,7 @@
 # FyodorOS
+[![PyPI version](https://badge.fury.io/py/fyodoros.svg)](https://badge.fury.io/py/fyodoros)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ```
 ███████╗██╗   ██╗ ██████╗ ██████╗  ██████╗ ██████╗
@@ -43,7 +46,7 @@ Every action taken by the Agent is intercepted by the `AgentSandbox`.
 
 1.  **Clone the Repository**
     ```bash
-    git clone https://github.com/your-org/fyodoros.git
+    git clone https://github.com/Kiy-K/FyodorOS.git
     cd fyodoros
     ```
 
@@ -52,7 +55,7 @@ Every action taken by the Agent is intercepted by the `AgentSandbox`.
 
     **Via pip (Recommended):**
     ```bash
-    pip install .
+    pip install fyodoros
     playwright install chromium
     ```
 
