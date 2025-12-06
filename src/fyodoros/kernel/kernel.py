@@ -16,7 +16,7 @@ class Kernel:
         self.sys = SyscallHandler(self.scheduler, self.user_manager)
 
     def start(self):
-        from shell.shell import Shell
+        from fyodoros.shell.shell import Shell
         shell = Shell(self.sys, self.sys.scheduler) # Shell expects (syscall, supervisor/scheduler)
         # Note: Shell init signature is (syscall, supervisor=None).
         # We can pass supervisor if we had one.

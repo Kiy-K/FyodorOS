@@ -1,9 +1,9 @@
 # kernel/agent.py
 
 import re
-from kernel.dom import SystemDOM
-from kernel.sandbox import AgentSandbox
-from kernel.llm import LLMProvider
+from fyodoros.kernel.dom import SystemDOM
+from fyodoros.kernel.sandbox import AgentSandbox
+from fyodoros.kernel.llm import LLMProvider
 
 class ReActAgent:
     def __init__(self, syscall_handler, model="gpt-3.5-turbo"):

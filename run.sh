@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 fyodor_cli.py start
+python3 -m fyodoros.cli start
