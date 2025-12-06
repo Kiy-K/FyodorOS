@@ -57,6 +57,24 @@ fyodor plugin settings github token YOUR_TOKEN
 fyodor plugin deactivate github
 ```
 
+### Developing Plugins (Polyglot Support)
+FyodorOS supports Python, C++, and Node.js plugins.
+
+**Create a new plugin:**
+```bash
+fyodor plugin create my_plugin --lang cpp
+```
+
+**Build a plugin:**
+```bash
+fyodor plugin build my_plugin
+```
+
+**Install from Git:**
+```bash
+fyodor plugin install https://github.com/user/repo
+```
+
 ## 📦 Installation & Usage
 
 1.  **Clone the Repository**

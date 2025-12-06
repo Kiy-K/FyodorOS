@@ -17,3 +17,11 @@
 ### Changed
 - `UserManager` now stores roles and passwords in a dictionary structure instead of just password hashes.
 - CLI updated to include `dashboard` command.
+
+### Plugin System
+- Added **C++ Registry Core** (`registry_core` extension) for high-performance plugin management.
+- Added **Plugin Manager** CLI (`fyodor plugin install/build/create`).
+- Added Multi-language Support:
+  - **Python**: Standard support.
+  - **C++**: Auto-compilation via `cmake`.
+  - **Node.js**: Auto-dependency installation via `npm`/`bun`.

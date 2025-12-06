@@ -190,6 +190,104 @@ def deactivate_plugin(name: str):
     else:
         console.print(f"[yellow]Plugin '{name}' was not active.[/yellow]")
 
+@plugin_app.command("install")
+def install_plugin(url: str, name: str = typer.Option(None, help="Rename plugin directory")):
+    """Install a plugin from a Git URL."""
+    if not name:
+        name = url.split("/")[-1].replace(".git", "")
+
+    target_dir = Path.home() / ".fyodor" / "plugins" / name
+    if target_dir.exists():
+        console.print(f"[red]Plugin '{name}' already exists.[/red]")
+        return
+
+    console.print(f"Installing {name} from {url}...")
+    try:
+        subprocess.check_call(["git", "clone", url, str(target_dir)])
+        console.print(f"[green]Installed to {target_dir}[/green]")
+        console.print("Running build detection...")
+        _build_plugin(target_dir)
+    except Exception as e:
+        console.print(f"[red]Installation failed: {e}[/red]")
+
+@plugin_app.command("build")
+def build_plugin(name: str):
+    """Build a plugin (Node/C++/Python)."""
+    target_dir = Path.home() / ".fyodor" / "plugins" / name
+    if not target_dir.exists():
+        console.print(f"[red]Plugin '{name}' not found.[/red]")
+        return
+    _build_plugin(target_dir)
+
+def _build_plugin(path: Path):
+    if (path / "package.json").exists():
+        console.print("[cyan]Detected Node.js plugin. Installing dependencies...[/cyan]")
+        try:
+            # Check for bun
+            try:
+                subprocess.check_call(["bun", "install"], cwd=path)
+            except FileNotFoundError:
+                subprocess.check_call(["npm", "install"], cwd=path)
+            console.print("[green]Node dependencies installed.[/green]")
+        except Exception as e:
+            console.print(f"[red]Node build failed: {e}[/red]")
+
+    if (path / "CMakeLists.txt").exists():
+        console.print("[cyan]Detected C++ plugin. compiling...[/cyan]")
+        try:
+            build_dir = path / "build"
+            build_dir.mkdir(exist_ok=True)
+            subprocess.check_call(["cmake", ".."], cwd=build_dir)
+            subprocess.check_call(["make"], cwd=build_dir)
+            console.print("[green]C++ compilation complete.[/green]")
+        except Exception as e:
+            console.print(f"[red]C++ build failed: {e}[/red]")
+
+    if (path / "requirements.txt").exists():
+        console.print("[cyan]Detected Python dependencies. Installing...[/cyan]")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=path)
+            console.print("[green]Python dependencies installed.[/green]")
+        except Exception as e:
+            console.print(f"[red]Python dependency installation failed: {e}[/red]")
+
+@plugin_app.command("create")
+def create_plugin(name: str, lang: str = typer.Option("python", help="Language: python, cpp, node")):
+    """Scaffold a new plugin."""
+    target_dir = Path.home() / ".fyodor" / "plugins" / name
+    if target_dir.exists():
+        console.print(f"[red]Directory already exists.[/red]")
+        return
+
+    target_dir.mkdir(parents=True)
+
+    if lang == "python":
+        with open(target_dir / "__init__.py", "w") as f:
+            f.write(f"""from fyodoros.plugins import Plugin
+class {name.capitalize()}Plugin(Plugin):
+    def setup(self, kernel):
+        print("Hello from {name}!")
+""")
+    elif lang == "node":
+        with open(target_dir / "package.json", "w") as f:
+            f.write(f'{{"name": "{name}", "version": "0.1.0", "main": "index.js"}}')
+        with open(target_dir / "index.js", "w") as f:
+            f.write("""console.log("Hello from Node Plugin!");""")
+    elif lang == "cpp":
+        with open(target_dir / "CMakeLists.txt", "w") as f:
+            f.write(f"""cmake_minimum_required(VERSION 3.10)
+project({name})
+add_library({name} SHARED library.cpp)
+""")
+        with open(target_dir / "library.cpp", "w") as f:
+            f.write("""#include <iostream>
+extern "C" void init_plugin() {
+    std::cout << "Hello from C++ Plugin!" << std::endl;
+}
+""")
+
+    console.print(f"[green]Created {lang} plugin at {target_dir}[/green]")
+
 @plugin_app.command("settings")
 def plugin_settings(name: str, key: str = typer.Argument(None), value: str = typer.Argument(None)):
     """Configure plugin settings."""
