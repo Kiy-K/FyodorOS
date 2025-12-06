@@ -150,6 +150,25 @@ class Shell:
                 state = self.sys.sys_get_state()
                 return str(state)
 
+            elif op == "create":
+                if len(args) < 1: return "Usage: create <filename>"
+                filename = args[0]
+                if "." not in filename:
+                    filename += ".txt"
+                content = " ".join(args[1:]) if len(args) > 1 else ""
+                self.sys.sys_write(filename, content)
+                return f"Created {filename}"
+
+            elif op == "navigate":
+                if len(args) < 1 or args[0] in ["--help", "help", "list"]:
+                    return "Available apps: browser, calc, explorer, system, user\nUsage: navigate <app> [args]"
+
+                app_name = args[0]
+                # Allow 'navigate browser' to map to 'run browser' logic
+                # We reuse _run_program but need to adjust args to match 'run <prog> args' signature expected by _run_program
+                # _run_program expects [prog, arg1, arg2...]
+                return self._run_program(args)
+
             elif op == "agent":
                 if len(args) < 1:
                     return "Usage: agent <task description>"
@@ -179,6 +198,8 @@ class Shell:
                     "  run-service <svc> - start background service\n"
                     "  dom               - show system state (Agent)\n"
                     "  agent <task>      - give a task to the AI Agent\n"
+                    "  create <file>     - create a file (default .txt)\n"
+                    "  navigate <app>    - run a user app (browser, etc)\n"
                 )
 
             else:
