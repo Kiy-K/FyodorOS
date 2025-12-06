@@ -47,30 +47,36 @@ Every action taken by the Agent is intercepted by the `AgentSandbox`.
     cd fyodoros
     ```
 
-2.  **Install Dependencies**
+2.  **Install Package**
+    You can install FyodorOS as a Python package.
+
+    **Via pip (Recommended):**
     ```bash
-    pip install -r requirements.txt
+    pip install .
     playwright install chromium
     ```
 
-3.  **Using the Fyodor CLI**
-    We provide a rich CLI launcher to manage the OS easily.
+    **Via Conda:**
+    ```bash
+    conda env create -f environment.yml
+    conda activate fyodoros
+    playwright install chromium
+    ```
 
-    **Quick Start:**
-    *   **Windows**: Double-click `run.bat`
-    *   **Linux/Mac**: Run `./run.sh`
+3.  **Launch the OS**
 
-    **Manual Usage:**
+    **Option A: Using the CLI (if installed)**
     ```bash
     # 1. Setup (Configure API Keys)
-    python fyodor_cli.py setup
+    fyodor setup
 
-    # 2. Launch the OS
-    python fyodor_cli.py start
-
-    # 3. View Info
-    python fyodor_cli.py info
+    # 2. Start
+    fyodor start
     ```
+
+    **Option B: Using Convenience Scripts**
+    *   **Windows**: Double-click `run.bat`
+    *   **Linux/Mac**: Run `./run.sh`
 
 4.  **Interact**
     Inside the FyodorOS Shell:
@@ -119,10 +125,10 @@ agent "Move all .txt files from /home/guest to /home/guest/documents"
 
 ## 🏗️ Architecture
 
-*   **`kernel/`**: Core logic including Scheduler, SyscallHandler, and the new **Agent Layer** (`agent.py`, `dom.py`, `sandbox.py`).
-*   **`bin/`**: User-space applications. These are "Agent-Aware" binaries that output JSON.
-*   **`shell/`**: The interactive CLI wrapper.
-*   **`fyodor_cli.py`**: The launcher and configuration tool.
+*   **`src/fyodoros/kernel/`**: Core logic including Scheduler, SyscallHandler, and the new **Agent Layer** (`agent.py`, `dom.py`, `sandbox.py`).
+*   **`src/fyodoros/bin/`**: User-space applications. These are "Agent-Aware" binaries that output JSON.
+*   **`src/fyodoros/shell/`**: The interactive CLI wrapper.
+*   **`src/fyodoros/cli.py`**: The launcher and configuration tool.
 
 ## 🤝 Contributing
 
