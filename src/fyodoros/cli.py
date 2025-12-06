@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# fyodoros/cli.py
 import typer
 import os
 import sys
@@ -39,12 +39,9 @@ def start():
                     key, val = line.strip().split("=", 1)
                     env[key] = val
 
-    # Run the OS script
+    # Run the OS script via module
     try:
-        # We use sys.executable to ensure we use the same python interpreter
-        # subprocess.run replaces the current process effectively for the user if we wanted,
-        # but here we just run it.
-        ret = subprocess.call([sys.executable, "fyodoros.py"], env=env)
+        ret = subprocess.call([sys.executable, "-m", "fyodoros"], env=env)
         if ret != 0:
             console.print(f"[red]Kernel exited with code {ret}[/red]")
     except KeyboardInterrupt:
@@ -68,7 +65,7 @@ def setup():
             f.write("# No API Key set, using Mock LLM\n")
             console.print("[yellow]No key provided. Using Mock LLM.[/yellow]")
 
-    console.print("\n[bold]Setup Complete![/bold] Run [cyan]python fyodor_cli.py start[/cyan] to launch.")
+    console.print("\n[bold]Setup Complete![/bold] Run [cyan]fyodor start[/cyan] to launch.")
 
 @app.command()
 def info():

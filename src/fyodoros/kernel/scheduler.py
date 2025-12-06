@@ -1,5 +1,5 @@
 # kernel/scheduler.py
-from kernel.process import ProcessState
+from fyodoros.kernel.process import ProcessState
 
 class Scheduler:
     def __init__(self):

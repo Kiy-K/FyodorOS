@@ -90,9 +90,9 @@ class AgentSandbox:
             if prog in allowed_apps:
                 try:
                     # We can use the shell's logic to run programs, or import directly.
-                    # Since we are in the kernel layer, we should dynamically import from bin.
+                    # Since we are in the kernel layer, we should dynamically import from fyodoros.bin.
                     from importlib import import_module
-                    mod = import_module(f"bin.{prog}")
+                    mod = import_module(f"fyodoros.bin.{prog}")
                     if hasattr(mod, "main"):
                         # Pass syscall handler so apps can interact with kernel
                         return mod.main(prog_args, self.sys)

@@ -1,8 +1,8 @@
 # kernel/syscalls.py
 
 import time
-from kernel.filesystem import FileSystem
-from kernel.users import UserManager
+from fyodoros.kernel.filesystem import FileSystem
+from fyodoros.kernel.users import UserManager
 
 class SyscallHandler:
     def __init__(self, scheduler=None, user_manager=None):

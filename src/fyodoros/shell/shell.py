@@ -1,9 +1,9 @@
 # shell/shell.py
 
 import time
-from kernel.process import Process
+from fyodoros.kernel.process import Process
 from importlib import import_module
-from kernel.agent import ReActAgent
+from fyodoros.kernel.agent import ReActAgent
 
 class Shell:
     """
@@ -180,7 +180,7 @@ class Shell:
         prog_args = args[1:]
 
         try:
-            mod = import_module(f"bin.{program}")
+            mod = import_module(f"fyodoros.bin.{program}")
         except ImportError:
             return f"Program not found: {program}"
         except Exception as e:

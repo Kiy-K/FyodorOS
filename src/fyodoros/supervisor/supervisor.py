@@ -1,7 +1,7 @@
 # supervisor/supervisor.py
 
-from kernel.process import Process
-from kernel.scheduler import Scheduler
+from fyodoros.kernel.process import Process
+from fyodoros.kernel.scheduler import Scheduler
 
 
 class Supervisor:
@@ -34,7 +34,7 @@ class Supervisor:
         for svc in services:
             svc = svc.strip()
             if svc == "journal":
-                from supervisor.journal_daemon import journal_daemon
+                from fyodoros.supervisor.journal_daemon import journal_daemon
                 self.start_service("journal", journal_daemon(self.sys))
     def kill_process(self, pid):
         ok = self.sys.sys_kill(pid)
@@ -47,7 +47,7 @@ class Supervisor:
     # new public API
     def run_service(self, name):
         if name == "journal":
-            from supervisor.journal_daemon import journal_daemon
+            from fyodoros.supervisor.journal_daemon import journal_daemon
             self.start_service("journal", journal_daemon(self.sys))
             return "journal started"
         return f"service {name} not found"

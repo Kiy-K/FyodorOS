@@ -1,3 +1,3 @@
 @echo off
-python fyodor_cli.py start
+python -m fyodoros.cli start
 pause
