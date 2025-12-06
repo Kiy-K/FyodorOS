@@ -55,7 +55,7 @@ Every action taken by the Agent is intercepted by the `AgentSandbox`.
 
     **Via pip (Recommended):**
     ```bash
-    pip install .
+    pip install fyodoros
     playwright install chromium
     ```
 
