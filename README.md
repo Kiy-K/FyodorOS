@@ -42,6 +42,21 @@ Every action taken by the Agent is intercepted by the `AgentSandbox`.
 - **App Whitelisting**: Only authorized "Agent Apps" can be executed.
 - **Transparency**: All actions are logged and verifiable.
 
+## 🔌 Plugins (New in v0.3.0)
+FyodorOS now supports a powerful plugin system.
+- **Github Integration**: `github` - List repos, create issues, view PRs.
+- **Slack Notifier**: `slack_notifier` - Send notifications to Slack.
+- **Usage Dashboard**: `usage_dashboard` - Background system monitoring. View with `fyodor dashboard`.
+- **Team Collaboration**: `team_collaboration` - RBAC system extending `UserManager`.
+
+### Managing Plugins
+```bash
+fyodor plugin list
+fyodor plugin activate github
+fyodor plugin settings github token YOUR_TOKEN
+fyodor plugin deactivate github
+```
+
 ## 📦 Installation & Usage
 
 1.  **Clone the Repository**

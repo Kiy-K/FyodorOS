@@ -1,6 +1,8 @@
 # fyodoros/cli.py
 import typer
 import os
+import json
+from pathlib import Path
 import sys
 import subprocess
 from rich.console import Console
@@ -89,11 +91,19 @@ def user(username: str, password: str = typer.Argument(None)):
     if not password:
         password = Prompt.ask(f"Enter password for '{username}'", password=True)
 
+    # When running from CLI, we assume 'root' privilege unless we want to implement
+    # a sudo mechanism. For now, we pass 'root' as requestor, but
+    # if the TeamCollaboration plugin is active, it might inspect real user context.
+    # Since CLI is outside the "login session", we assume it's an admin op.
+    # However, to demonstrate RBAC, we should ideally check who is running this.
+    # But for CLI 'fyodor user', it IS the admin tool.
+
     um = UserManager()
-    if um.add_user(username, password):
+    # By default, CLI usage is considered 'root' / admin action.
+    if um.add_user(username, password, requestor="root"):
         console.print(f"[green]User '{username}' created successfully![/green]")
     else:
-        console.print(f"[red]Failed to create user '{username}' (already exists?).[/red]")
+        console.print(f"[red]Failed to create user '{username}' (Permission denied or already exists).[/red]")
 
 @app.command()
 def setup():
@@ -179,6 +189,73 @@ def deactivate_plugin(name: str):
         console.print(f"[green]Plugin '{name}' deactivated.[/green]")
     else:
         console.print(f"[yellow]Plugin '{name}' was not active.[/yellow]")
+
+@plugin_app.command("settings")
+def plugin_settings(name: str, key: str = typer.Argument(None), value: str = typer.Argument(None)):
+    """Configure plugin settings."""
+    reg = PluginRegistry()
+
+    if not key:
+        # List settings for this plugin (if we had schema, but here we just show existing)
+        # Since we don't have a schema, we just say use key value
+        console.print(f"Current settings for {name}:")
+        console.print(reg.plugin_settings.get(name, {}))
+        return
+
+    if value:
+        reg.set_setting(name, key, value)
+        console.print(f"[green]Set {name}.{key} = {value}[/green]")
+    else:
+        val = reg.get_setting(name, key)
+        console.print(f"{name}.{key} = {val}")
+
+@app.command()
+def dashboard(view: str = typer.Argument("tui", help="View mode: tui or logs")):
+    """
+    View Usage Dashboard (requires usage_dashboard plugin).
+    """
+    log_file = Path.home() / ".fyodor" / "dashboard" / "stats.json"
+
+    if not log_file.exists():
+        console.print("[red]No dashboard data found. Is the 'usage_dashboard' plugin active?[/red]")
+        return
+
+    if view == "logs":
+        with open(log_file, "r") as f:
+            data = json.load(f)
+            console.print(json.dumps(data, indent=2))
+    elif view == "tui":
+        try:
+            from rich.live import Live
+            from rich.table import Table
+            import time
+
+            with Live(refresh_per_second=1) as live:
+                while True:
+                    try:
+                        with open(log_file, "r") as f:
+                            data = json.load(f)
+                            if not data:
+                                continue
+                            latest = data[-1]
+
+                            table = Table(title="System Dashboard")
+                            table.add_column("Metric", style="cyan")
+                            table.add_column("Value", style="magenta")
+
+                            table.add_row("Timestamp", str(latest["timestamp"]))
+                            table.add_row("CPU Usage", f"{latest['cpu_percent']}%")
+                            table.add_row("Memory Usage", f"{latest['memory_percent']}%")
+                            table.add_row("Boot Time", str(latest["boot_time"]))
+
+                            live.update(Panel(table))
+                    except Exception:
+                        pass
+                    time.sleep(1)
+        except KeyboardInterrupt:
+            console.print("Dashboard closed.")
+    else:
+        console.print(f"[red]Unknown view mode: {view}[/red]")
 
 @app.command()
 def info():
