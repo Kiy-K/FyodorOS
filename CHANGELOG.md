@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.0] - 2025-03-02
+## [0.2.0] - 2025-12-06
 
 ### Added
 - **Launcher TUI**: `fyodor tui` provides an interactive menu for managing the OS.
@@ -18,7 +18,7 @@
 - Updated `LLMProvider` to read `LLM_PROVIDER` from `.env`.
 - Improved `.env` file handling in `cli.py` to support quoted values and comments.
 
-## [0.1.1] - 2025-03-01
+## [0.1.1] - 2025-12-06
 
 ### Added
 - **Login Hotfix**: Added auto-login fallback to `root` user if interactive login fails.
