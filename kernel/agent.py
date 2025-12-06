@@ -93,6 +93,7 @@ AVAILABLE ACTIONS:
 - read_file(path)
 - write_file(path, content)
 - append_file(path, content)
+- run_process(app_name, args) <-- Use this to run apps: 'browser', 'calc', 'explorer', 'system', 'user'.
 - done()  <-- Call this when the task is complete.
 
 Do not interact with system files (/kernel, /bin, /etc).
