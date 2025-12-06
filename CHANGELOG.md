@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - 2025-03-03
+## [0.3.0] - 2025-12-07
 
 ### Added
 - **Plugin System**: Modular architecture to extend FyodorOS capabilities.
@@ -11,7 +11,7 @@
 - **Developer API**: New `fyodoros.plugins.Plugin` abstract base class for creating extensions.
 - **Documentation**: Added `PLUGIN_DEVELOPMENT.md` guide for contributors.
 
-## [0.2.0] - 2025-03-02
+## [0.2.0] - 2025-12-06
 
 ### Added
 - **Launcher TUI**: `fyodor tui` provides an interactive menu for managing the OS.
@@ -29,7 +29,7 @@
 - Updated `LLMProvider` to read `LLM_PROVIDER` from `.env`.
 - Improved `.env` file handling in `cli.py` to support quoted values and comments.
 
-## [0.1.1] - 2025-03-01
+## [0.1.1] - 2025-12-06
 
 ### Added
 - **Login Hotfix**: Added auto-login fallback to `root` user if interactive login fails.
