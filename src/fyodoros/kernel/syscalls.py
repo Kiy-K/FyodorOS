@@ -16,10 +16,6 @@ class SyscallHandler:
     # Authentication
     def sys_login(self, user, password):
         if self.user_manager.authenticate(user, password):
-            # If we are in a process context, update its UID?
-            # Usually login spawns a NEW shell with that UID.
-            # But here the shell asks to login.
-            # We return True, and the shell updates its state.
             return True
         return False
 
@@ -61,29 +57,8 @@ class SyscallHandler:
         return True
 
     def sys_delete(self, path):
-        # Need to implement delete in FS first?
-        # Checking filesystem.py... it doesn't have delete.
-        # But SyscallHandler should expose it if we add it.
-        # Wait, I cannot modify filesystem.py easily if I didn't plan it?
-        # Actually I can.
-        # Let's assume FS needs update too.
-        # For now, I'll implement a workaround or update FS.
-        # Since FS is in memory, I can just traverse and del.
         uid = self._get_current_uid()
-        # Permission check
-        # We need to resolve parent and remove child.
-        # Let's do it directly here or modify FS.
-        # Ideally modify FS.
-
         try:
-            # Re-implementing delete logic here for speed if FS lacks it
-            # But wait, self.fs is FileSystem instance.
-            # I should add delete to FileSystem.
-            # I will modify filesystem.py in next step or use this hack?
-            # Better to be clean.
-            # I'll modify filesystem.py in the plan step.
-            # Wait, I can't modify filesystem.py in this "overwrite syscalls" block.
-            # So I will assume I will modify filesystem.py next.
             self.fs.delete_file(path, uid)
             self.sys_log(f"[fs] delete {path} by {uid}")
             return True
@@ -93,7 +68,6 @@ class SyscallHandler:
     def sys_kill(self, pid, sig="SIGTERM"):
         if not self.scheduler: return False
 
-        # Permission check? Only root or owner can kill?
         current_uid = self._get_current_uid()
 
         for p in self.scheduler.processes:
@@ -158,21 +132,13 @@ class SyscallHandler:
         state = {
             "processes": self.sys_proc_list(),
             "cwd": self.sys_ls("/") # Root for now, but should be caller CWD if known
-            # CWD is a shell concept, not kernel.
-            # But we can perhaps introspect the process env if we stored CWD there?
         }
-        # Try to get CWD from current process if it's the shell
-        if self.scheduler and self.scheduler.current_process:
-             # If the process has 'cwd' in env?
-             pass
         return state
 
     # Logging
     def sys_log(self, msg):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         line = f"{timestamp} {msg}"
-        # print(f"[syslog] {line}")
-        # Log to file (root permission implied for system logs)
         try:
             self.fs.append_file("/var/log/journal/kernel.log", line, "root")
         except:

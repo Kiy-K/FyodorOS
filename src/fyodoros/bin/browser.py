@@ -18,34 +18,7 @@ def main(args, syscalls):
 
     cmd = args[0]
 
-    # We need a persistent browser session?
-    # The 'run' command in our shell currently is one-off.
-    # To support persistence, we'd need to keep the process alive or store state.
-    # For this v1, we will launch a new browser each time? That's slow.
-    # Or maybe we assume the Agent calls are stateful in a sequence?
-    # But 'main' exits.
-
-    # Solution: Store browser state (context) on disk or in memory?
-    # Since we are in the "Kernel" process (simulated), we can use a global or singleton?
-    # No, let's keep it simple:
-    # For "navigate", we fetch and return.
-    # But "click" requires existing page.
-
-    # Ideally, we should have a "BrowserService" in the Kernel.
-    # But for now, let's implement a stateless "fetcher" or accept that 'navigate' is the only fully supported one
-    # unless we serialize the page? Playwright doesn't work that way easily.
-
-    # Hack: We only implement 'navigate' which returns the DOM.
-    # 'click' would need to re-navigate or we need a daemon.
-    # Given the constraints, let's assume 'navigate' is the primary action
-    # and if the user wants to click, they might need a more complex interaction pattern
-    # or we just re-load the page (stateless web).
-
-    # Re-reading requirements: "interact with"
-    # So we need state.
-    # We can use a module-level variable in this file, BUT this file is imported dynamically each time?
-    # No, 'import_module' caches. So global variables HERE persist across 'run' calls!
-
+    # We use global variables to persist state across syscalls because import_module caches the module.
     global _browser, _page, _playwright
 
     try:
