@@ -12,6 +12,7 @@ from rich import print as rprint
 from fyodoros.kernel.users import UserManager
 from fyodoros.kernel.network import NetworkManager
 from fyodoros.plugins.registry import PluginRegistry
+from fyodoros.utils.security import encrypt_value, decrypt_value
 
 app = typer.Typer()
 plugin_app = typer.Typer()
@@ -49,6 +50,9 @@ def _load_env_safely():
                     val = val.strip()
                     if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                         val = val[1:-1]
+
+                    # Decrypt if encrypted
+                    val = decrypt_value(val)
                     env[key.strip()] = val
     return env
 
@@ -127,11 +131,20 @@ def setup():
         api_key = Prompt.ask(f"Enter your {key_name}", password=True)
 
     # Write robustly
-    with open(".env", "w") as f:
+    # Set strict permissions on .env (600)
+    env_path = Path(".env")
+    if not env_path.exists():
+        env_path.touch(mode=0o600)
+    else:
+        os.chmod(env_path, 0o600)
+
+    with open(env_path, "w") as f:
         f.write(f"# FyodorOS Configuration\n")
         f.write(f"LLM_PROVIDER={provider}\n")
         if api_key:
-            f.write(f"{key_name}={api_key}\n")
+            # Encrypt API Key
+            encrypted_key = encrypt_value(api_key)
+            f.write(f"{key_name}={encrypted_key}\n")
 
     console.print(f"\n[green]Configuration saved to .env[/green]")
     console.print("[bold]Setup Complete![/bold] Run [cyan]fyodor tui[/cyan] or [cyan]fyodor start[/cyan] to launch.")
@@ -380,6 +393,39 @@ def dashboard(view: str = typer.Argument("tui", help="View mode: tui or logs")):
             console.print("Dashboard closed.")
     else:
         console.print(f"[red]Unknown view mode: {view}[/red]")
+
+@app.command()
+def gui():
+    """
+    Launch FyodorOS Desktop GUI (Tauri).
+    Installs/builds if necessary.
+    """
+    gui_dir = Path("gui")
+    if not gui_dir.exists():
+        console.print("[red]GUI directory not found![/red]")
+        return
+
+    # Check if built binary exists (assuming Linux/Release for now)
+    # The path depends on Cargo target dir. Default is src-tauri/target/release
+    binary_path = gui_dir / "src-tauri" / "target" / "release" / "fyodor-gui"
+
+    # Simple check: if not built or user requests rebuild (not implemented yet), run installer
+    if not binary_path.exists():
+        console.print("[yellow]GUI not installed/built. Running setup...[/yellow]")
+        setup_script = gui_dir / "setup_gui.py"
+        try:
+            subprocess.check_call([sys.executable, str(setup_script)])
+        except subprocess.CalledProcessError:
+            console.print("[red]GUI Setup Failed.[/red]")
+            return
+
+    console.print("[green]Launching GUI...[/green]")
+    try:
+        # Launch the binary
+        # We might need to handle detaching or blocking. Blocking for now.
+        subprocess.call([str(binary_path)])
+    except Exception as e:
+        console.print(f"[red]Failed to launch GUI: {e}[/red]")
 
 @app.command()
 def info():
