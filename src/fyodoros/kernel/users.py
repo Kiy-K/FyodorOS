@@ -211,7 +211,7 @@ class UserManager:
             return "user" in roles
 
         # This will be extended by TeamCollaboration plugin via monkeypatching or similar
-        return True
+        return False
 
     def list_users(self):
         """

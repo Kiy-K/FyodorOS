@@ -7,3 +7,6 @@ __pycache__/
 
 # Local binaries (optional)
 local_bin/
+
+# Tests
+tests/
