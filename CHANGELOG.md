@@ -1,6 +1,39 @@
 # Changelog
 
-## [0.3.5] - Unreleased
+## [0.4.0] - YYYY-MM-DD
+
+### Added
+
+#### Kernel Networking Layer
+- **Global On/Off Switch**: Network functionality can now be controlled via `fyodor network` command
+- **Strict Socket Enforcement**: Monkeypatching implementation ensures all socket operations go through the kernel layer
+- **RBAC Integration**: Network access control through `manage_network` and `use_network` permissions
+
+#### NASM Runtime
+- **C++ FFI Sandbox Extension**: Native assembly execution in sandboxed environment
+- **`sys_exec_nasm` Syscall**: New system call for executing NASM code from within the kernel
+
+### Examples
+
+#### CLI Network Management
+```bash
+# Enable/disable network globally
+fyodor network on
+fyodor network off
+```
+
+#### Python Agent Running NASM
+```python
+# Example of executing NASM code from Python agent
+result = sys_exec_nasm("""
+    section .text
+    global _start
+    _start:
+        ; Your NASM code here
+""")
+```
+
+## [0.3.5] - 2025-12-06
 ### Added
 - **Plugin System Enhancements**:
   - Added support for plugin configuration via `fyodor plugin settings`.
