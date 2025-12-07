@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - 2024-05-01
+## [0.5.0] - 2025-12-07
 ### Added
 - **Docker Integration**: `sys_docker_*` syscalls, CLI commands, and Agent actions.
 - **Kubernetes Integration**: `sys_k8s_*` syscalls, CLI commands, and Agent actions.
