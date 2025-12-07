@@ -1,11 +1,13 @@
 # kernel/users.py
 
 import hashlib
+from argon2 import PasswordHasher
 import json
 import os
 
 class UserManager:
     DB_FILE = "users.json"
+    _ph = PasswordHasher()
 
     def __init__(self):
         self.users = {}
@@ -26,7 +28,19 @@ class UserManager:
             self._save()
 
     def _hash(self, pw):
-        return hashlib.sha256(pw.encode()).hexdigest()
+        """
+        Hash a password using Argon2.
+        """
+        return self._ph.hash(pw)
+    def _verify(self, hash_val, pw):
+        """
+        Verify a password against an Argon2 hash.
+        """
+        try:
+            return self._ph.verify(hash_val, pw)
+        except Exception:
+            return False
+
 
     def _load(self):
         if os.path.exists(self.DB_FILE):
@@ -57,9 +71,10 @@ class UserManager:
         if user not in self.users:
             return False
         user_data = self.users[user]
-        if isinstance(user_data, str): # Should be handled by load, but just in case
-            return user_data == self._hash(pw)
-        return user_data.get("password") == self._hash(pw)
+        hash_val = user_data if isinstance(user_data, str) else user_data.get("password")
+        if not hash_val:
+            return False
+        return self._verify(hash_val, pw)
 
     def get_roles(self, user):
         self._load()
