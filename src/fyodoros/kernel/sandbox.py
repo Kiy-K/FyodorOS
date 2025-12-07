@@ -144,8 +144,12 @@ class AgentSandbox:
                              # We use empty env for strict isolation
                              # But we might need PATH?
                              # Let's map PATH to a safe bin dir if we had one.
-                             self.core.execute(prog, prog_args, {})
-                             return f"Executed {prog}"
+                             res = self.core.execute(prog, prog_args, {})
+                             # Return structured output if possible, or just stdout
+                             if res["return_code"] == 0:
+                                 return res["stdout"]
+                             else:
+                                 return f"Error (RC {res['return_code']}): {res['stderr']}"
                          except Exception as e:
                              return f"Execution Error: {e}"
                     return f"Error: App {prog} not found."

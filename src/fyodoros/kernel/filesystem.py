@@ -251,11 +251,12 @@ class FileSystem:
 
         Raises:
             PermissionError: If creation is not allowed.
+            FileExistsError: If path already exists.
         """
         try:
             self._resolve(path)
             # Already exists
-            return
+            raise FileExistsError(f"Directory already exists: {path}")
         except KeyError:
             pass
 

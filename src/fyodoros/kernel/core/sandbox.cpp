@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <poll.h>
 
 namespace py = pybind11;
 namespace fs = std::filesystem;
@@ -59,9 +60,9 @@ public:
         return norm_str;
     }
 
-    void execute(const std::string& cmd, const std::vector<std::string>& args, const std::map<std::string, std::string>& env) {
-        // Basic execute without output capture
-        execute_internal(cmd, args, env, false);
+    std::map<std::string, py::object> execute(const std::string& cmd, const std::vector<std::string>& args, const std::map<std::string, std::string>& env) {
+        // Capture output by default so Agent can see results
+        return execute_internal(cmd, args, env, true);
     }
 
     // Compiles and runs NASM code
@@ -78,8 +79,6 @@ public:
         out.close();
 
         // 1. Compile: nasm -f elf64 <file> -o <obj>
-        // We need 'nasm' in PATH or hardcoded. Assuming PATH inside sandbox env or host env.
-        // We should execute this in sandbox context.
         std::vector<std::string> nasm_args = {"nasm", "-f", "elf64", asm_file, "-o", obj_file};
         auto res_compile = execute_with_output("nasm", nasm_args, {});
 
@@ -93,7 +92,6 @@ public:
         }
 
         // 2. Link: gcc <obj> -o <exe> -no-pie
-        // Using gcc to link against libc
         std::vector<std::string> link_args = {"gcc", obj_file, "-o", exe_file, "-no-pie"};
         auto res_link = execute_with_output("gcc", link_args, {});
 
@@ -152,10 +150,6 @@ private:
             std::vector<char*> c_env;
             std::vector<std::string> env_strs;
 
-            // Pass through PATH if not present, otherwise commands like 'nasm' won't be found
-            // unless we rely on absolute paths or host env.
-            // For safety, we usually clear env, but we need basic tools here.
-            // If 'env' is empty, we might want to inject PATH.
             bool path_set = false;
             for (const auto& pair : env) {
                 env_strs.push_back(pair.first + "=" + pair.second);
@@ -171,7 +165,6 @@ private:
 
             // Prepare Args
             std::vector<char*> c_args;
-            // args[0] usually is the program name
             for (const auto& arg : args) c_args.push_back(const_cast<char*>(arg.c_str()));
             c_args.push_back(nullptr);
 
@@ -190,21 +183,39 @@ private:
             std::string stdout_str, stderr_str;
 
             if (capture_output) {
-                // Read from pipes
-                // Simple implementation: read until EOF.
-                // Note: This can deadlock if pipe fills up and we waitpid before reading?
-                // Better to read in loop.
-                // But for simplicity in this synchronous call:
-                // We should read from both fds using select/poll or just read one then other (risk of deadlock if both large).
-                // Let's rely on standard small outputs for this task or use simple buffer reading.
+                // Use poll to read from both pipes without deadlocking
+                struct pollfd fds[2];
+                fds[0].fd = pipe_out[0];
+                fds[0].events = POLLIN;
+                fds[1].fd = pipe_err[0];
+                fds[1].events = POLLIN;
 
-                char buffer[1024];
-                ssize_t n;
-                while ((n = read(pipe_out[0], buffer, sizeof(buffer))) > 0) {
-                    stdout_str.append(buffer, n);
-                }
-                while ((n = read(pipe_err[0], buffer, sizeof(buffer))) > 0) {
-                    stderr_str.append(buffer, n);
+                bool out_open = true;
+                bool err_open = true;
+                char buffer[4096];
+
+                while (out_open || err_open) {
+                    int ret = poll(fds, 2, -1);
+                    if (ret < 0) {
+                         if (errno == EINTR) continue;
+                         break;
+                    }
+
+                    if (out_open && (fds[0].revents & POLLIN)) {
+                        ssize_t count = read(pipe_out[0], buffer, sizeof(buffer));
+                        if (count > 0) stdout_str.append(buffer, count);
+                        else out_open = false; // EOF or error
+                    } else if (out_open && (fds[0].revents & (POLLHUP | POLLERR))) {
+                        out_open = false;
+                    }
+
+                    if (err_open && (fds[1].revents & POLLIN)) {
+                        ssize_t count = read(pipe_err[0], buffer, sizeof(buffer));
+                        if (count > 0) stderr_str.append(buffer, count);
+                        else err_open = false;
+                    } else if (err_open && (fds[1].revents & (POLLHUP | POLLERR))) {
+                        err_open = false;
+                    }
                 }
 
                 close(pipe_out[0]);
