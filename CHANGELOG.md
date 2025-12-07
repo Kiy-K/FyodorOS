@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - YYYY-MM-DD
+## [0.4.0] - 2025-12-07
 
 ### Added
 
