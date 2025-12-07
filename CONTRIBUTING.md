@@ -17,7 +17,7 @@ FyodorOS is an experimental AI microkernel, and we welcome contributions from de
 
 ## 📜 Code of Conduct
 
-This project follows a simple principle: **Be respectful and constructive**. We're building something experimental and fun, so let's keep the community welcoming and collaborative.
+This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [khoitruong071510@gmail.com](mailto:khoitruong071510@gmail.com).
 
 ## 🤝 How Can I Contribute?
 
