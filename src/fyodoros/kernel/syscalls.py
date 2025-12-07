@@ -9,6 +9,7 @@ It handles permission checking and dispatches requests to the appropriate subsys
 
 import time
 import json
+import os
 from fyodoros.kernel.filesystem import FileSystem
 from fyodoros.kernel.users import UserManager
 from fyodoros.kernel.network import NetworkManager
@@ -125,6 +126,20 @@ class SyscallHandler:
             return self.scheduler.current_process.uid
         return "root" # Kernel/System context
 
+    # Filesystem Helpers
+    def _resolve_sandbox_path(self, path):
+        """
+        Check if path targets the sandbox.
+        Returns (is_sandbox, real_path)
+        """
+        if self.sandbox:
+            # AgentSandbox._resolve returns absolute paths rooted at sandbox.root_path
+            # We check if the incoming path starts with that root.
+            root = self.sandbox.root_path
+            if path.startswith(root):
+                return True, path
+        return False, path
+
     # Filesystem
     def sys_ls(self, path="/"):
         """
@@ -136,8 +151,31 @@ class SyscallHandler:
         Returns:
             list[str]: List of filenames.
         """
+        # Check Sandbox First
+        is_sb, real_path = self._resolve_sandbox_path(path)
+        if is_sb and os.path.exists(real_path):
+            if os.path.isdir(real_path):
+                return os.listdir(real_path)
+            else:
+                return [os.path.basename(real_path)]
+
+        # Fallback to In-Memory
         uid = self._get_current_uid()
-        return self.fs.list_dir(path, uid)
+        try:
+            return self.fs.list_dir(path, uid)
+        except ValueError:
+            # Handle "Not a directory" gracefully -> return single file
+            try:
+                # Check if it is a file
+                self.fs.read_file(path, uid)
+                return [path.split("/")[-1]]
+            except:
+                raise # Re-raise if neither
+        except Exception:
+            # Return empty list or raise?
+            # Standard ls raises error. But our shell prints "Error".
+            # Let's re-raise to let shell handle it, but fixed the ValueError case.
+            raise
 
     def sys_read(self, path):
         """
@@ -149,6 +187,11 @@ class SyscallHandler:
         Returns:
             str: File content.
         """
+        is_sb, real_path = self._resolve_sandbox_path(path)
+        if is_sb and os.path.exists(real_path) and os.path.isfile(real_path):
+            with open(real_path, 'r') as f:
+                return f.read()
+
         uid = self._get_current_uid()
         return self.fs.read_file(path, uid)
 
@@ -163,6 +206,17 @@ class SyscallHandler:
         Returns:
             bool: True.
         """
+        is_sb, real_path = self._resolve_sandbox_path(path)
+        if is_sb:
+            # Check parent existence for sandbox
+            parent = os.path.dirname(real_path)
+            if not os.path.exists(parent):
+                os.makedirs(parent)
+            with open(real_path, 'w') as f:
+                f.write(data)
+            self.sys_log(f"[fs-sandbox] write {path}")
+            return True
+
         uid = self._get_current_uid()
         self.fs.write_file(path, data, uid)
         self.sys_log(f"[fs] write {path} by {uid}")
@@ -179,6 +233,15 @@ class SyscallHandler:
         Returns:
             bool: True.
         """
+        is_sb, real_path = self._resolve_sandbox_path(path)
+        if is_sb:
+            parent = os.path.dirname(real_path)
+            if not os.path.exists(parent):
+                os.makedirs(parent)
+            with open(real_path, 'a') as f:
+                f.write(text + "\n")
+            return True
+
         uid = self._get_current_uid()
         self.fs.append_file(path, text, uid)
         return True
@@ -193,12 +256,27 @@ class SyscallHandler:
         Returns:
             bool: True if successful, False otherwise.
         """
+        is_sb, real_path = self._resolve_sandbox_path(path)
+        if is_sb:
+            try:
+                if os.path.isdir(real_path):
+                    os.rmdir(real_path) # Only empty
+                else:
+                    os.remove(real_path)
+                self.sys_log(f"[fs-sandbox] delete {path}")
+                return True
+            except Exception:
+                return False
+
         uid = self._get_current_uid()
         try:
             self.fs.delete_file(path, uid)
             self.sys_log(f"[fs] delete {path} by {uid}")
             return True
         except Exception as e:
+            # We swallow exception here but maybe we should log it?
+            # Or better, return failure.
+            # The original code swallowed it.
             return False
 
     def sys_kill(self, pid, sig="SIGTERM"):
@@ -335,7 +413,10 @@ class SyscallHandler:
         if not self.sandbox:
             return {"error": "Sandbox not available"}
 
-        return self.sandbox.execute("run_nasm", [source_code])
+        try:
+            return self.sandbox.execute("run_nasm", [source_code])
+        except Exception as e:
+            return {"error": str(e)}
 
     # Docker Integration
     def _check_docker_permission(self):
@@ -348,17 +429,26 @@ class SyscallHandler:
     def sys_docker_login(self, username, password, registry="https://index.docker.io/v1/"):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.login(username, password, registry)
+        try:
+            return self.docker_interface.login(username, password, registry)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_docker_logout(self, registry="https://index.docker.io/v1/"):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.logout(registry)
+        try:
+            return self.docker_interface.logout(registry)
+        except Exception as e:
+             return {"success": False, "error": str(e)}
 
     def sys_docker_build(self, path, tag, dockerfile="Dockerfile"):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.build_image(path, tag, dockerfile)
+        try:
+            return self.docker_interface.build_image(path, tag, dockerfile)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_docker_run(self, image, name=None, ports=None, env=None):
         if not self._check_docker_permission():
@@ -370,25 +460,35 @@ class SyscallHandler:
                 ports = json.loads(ports)
             if isinstance(env, str):
                 env = json.loads(env)
+            return self.docker_interface.run_container(image, name, ports, env)
         except json.JSONDecodeError as e:
             return {"success": False, "error": f"Invalid JSON format for ports/env: {str(e)}"}
-
-        return self.docker_interface.run_container(image, name, ports, env)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_docker_ps(self, all=False):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.list_containers(all=all)
+        try:
+            return self.docker_interface.list_containers(all=all)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_docker_stop(self, container_id):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.stop_container(container_id)
+        try:
+            return self.docker_interface.stop_container(container_id)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_docker_logs(self, container_id, tail=100):
         if not self._check_docker_permission():
             return {"success": False, "error": "Permission Denied: manage_docker required"}
-        return self.docker_interface.get_logs(container_id, tail)
+        try:
+            return self.docker_interface.get_logs(container_id, tail)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # Kubernetes Integration
     def _check_k8s_permission(self):
@@ -401,27 +501,42 @@ class SyscallHandler:
     def sys_k8s_deploy(self, name, image, replicas=1, namespace="default"):
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
-        return self.k8s_interface.create_deployment(name, image, replicas, namespace)
+        try:
+            return self.k8s_interface.create_deployment(name, image, replicas, namespace)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_k8s_scale(self, name, replicas, namespace="default"):
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
-        return self.k8s_interface.scale_deployment(name, replicas, namespace)
+        try:
+            return self.k8s_interface.scale_deployment(name, replicas, namespace)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_k8s_delete(self, name, namespace="default"):
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
-        return self.k8s_interface.delete_deployment(name, namespace)
+        try:
+            return self.k8s_interface.delete_deployment(name, namespace)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_k8s_get_pods(self, namespace="default"):
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
-        return self.k8s_interface.get_pods(namespace)
+        try:
+            return self.k8s_interface.get_pods(namespace)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def sys_k8s_logs(self, pod_name, namespace="default"):
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
-        return self.k8s_interface.get_pod_logs(pod_name, namespace)
+        try:
+            return self.k8s_interface.get_pod_logs(pod_name, namespace)
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     # System Control
     def sys_shutdown(self):
