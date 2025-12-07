@@ -8,9 +8,12 @@ It handles permission checking and dispatches requests to the appropriate subsys
 """
 
 import time
+import json
 from fyodoros.kernel.filesystem import FileSystem
 from fyodoros.kernel.users import UserManager
 from fyodoros.kernel.network import NetworkManager
+from fyodoros.kernel.cloud.docker_interface import DockerInterface
+from fyodoros.kernel.cloud.k8s_interface import KubernetesInterface
 
 class SyscallHandler:
     """
@@ -36,6 +39,8 @@ class SyscallHandler:
         self.scheduler = scheduler
         self.user_manager = user_manager or UserManager()
         self.network_manager = network_manager or NetworkManager(self.user_manager)
+        self.docker_interface = DockerInterface()
+        self.k8s_interface = KubernetesInterface()
         self.sandbox = None
 
     def set_scheduler(self, scheduler):
@@ -331,6 +336,92 @@ class SyscallHandler:
             return {"error": "Sandbox not available"}
 
         return self.sandbox.execute("run_nasm", [source_code])
+
+    # Docker Integration
+    def _check_docker_permission(self):
+        """Helper to check docker permissions."""
+        user = self._get_current_uid()
+        if user == "root":
+            return True
+        return self.user_manager.has_permission(user, "manage_docker")
+
+    def sys_docker_login(self, username, password, registry="https://index.docker.io/v1/"):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.login(username, password, registry)
+
+    def sys_docker_logout(self, registry="https://index.docker.io/v1/"):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.logout(registry)
+
+    def sys_docker_build(self, path, tag, dockerfile="Dockerfile"):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.build_image(path, tag, dockerfile)
+
+    def sys_docker_run(self, image, name=None, ports=None, env=None):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+
+        # Agent might send JSON strings
+        try:
+            if isinstance(ports, str):
+                ports = json.loads(ports)
+            if isinstance(env, str):
+                env = json.loads(env)
+        except json.JSONDecodeError as e:
+            return {"success": False, "error": f"Invalid JSON format for ports/env: {str(e)}"}
+
+        return self.docker_interface.run_container(image, name, ports, env)
+
+    def sys_docker_ps(self, all=False):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.list_containers(all=all)
+
+    def sys_docker_stop(self, container_id):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.stop_container(container_id)
+
+    def sys_docker_logs(self, container_id, tail=100):
+        if not self._check_docker_permission():
+            return {"success": False, "error": "Permission Denied: manage_docker required"}
+        return self.docker_interface.get_logs(container_id, tail)
+
+    # Kubernetes Integration
+    def _check_k8s_permission(self):
+        """Helper to check k8s permissions."""
+        user = self._get_current_uid()
+        if user == "root":
+            return True
+        return self.user_manager.has_permission(user, "manage_k8s")
+
+    def sys_k8s_deploy(self, name, image, replicas=1, namespace="default"):
+        if not self._check_k8s_permission():
+            return {"success": False, "error": "Permission Denied: manage_k8s required"}
+        return self.k8s_interface.create_deployment(name, image, replicas, namespace)
+
+    def sys_k8s_scale(self, name, replicas, namespace="default"):
+        if not self._check_k8s_permission():
+            return {"success": False, "error": "Permission Denied: manage_k8s required"}
+        return self.k8s_interface.scale_deployment(name, replicas, namespace)
+
+    def sys_k8s_delete(self, name, namespace="default"):
+        if not self._check_k8s_permission():
+            return {"success": False, "error": "Permission Denied: manage_k8s required"}
+        return self.k8s_interface.delete_deployment(name, namespace)
+
+    def sys_k8s_get_pods(self, namespace="default"):
+        if not self._check_k8s_permission():
+            return {"success": False, "error": "Permission Denied: manage_k8s required"}
+        return self.k8s_interface.get_pods(namespace)
+
+    def sys_k8s_logs(self, pod_name, namespace="default"):
+        if not self._check_k8s_permission():
+            return {"success": False, "error": "Permission Denied: manage_k8s required"}
+        return self.k8s_interface.get_pod_logs(pod_name, namespace)
 
     # System Control
     def sys_shutdown(self):

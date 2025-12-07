@@ -30,12 +30,32 @@ class SystemDOM:
         Returns the full state of the OS as a dictionary.
 
         Returns:
-            dict: A dictionary containing 'filesystem', 'processes', and 'users'.
+            dict: A dictionary containing 'filesystem', 'processes', 'users', and 'docker'.
         """
+        # Get docker state
+        docker_state = []
+        try:
+            res = self.sys.sys_docker_ps()
+            if res.get("success"):
+                docker_state = res.get("data", [])
+        except Exception:
+            pass
+
+        # Get K8s state
+        k8s_state = []
+        try:
+            res = self.sys.sys_k8s_get_pods()
+            if res.get("success"):
+                k8s_state = res.get("data", [])
+        except Exception:
+            pass
+
         return {
             "filesystem": self._get_fs_tree(self.sys.fs.root),
             "processes": self.sys.sys_proc_list(),
-            "users": self.sys.user_manager.list_users()
+            "users": self.sys.user_manager.list_users(),
+            "docker": docker_state,
+            "k8s_pods": k8s_state
         }
 
     def _get_fs_tree(self, node, path="/"):

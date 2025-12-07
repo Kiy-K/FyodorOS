@@ -11,4 +11,6 @@ dependencies:
     - playwright==1.41.2
     - rich
     - typer
+    - docker
+    - kubernetes
     - .

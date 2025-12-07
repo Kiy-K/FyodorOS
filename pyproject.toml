@@ -27,7 +27,9 @@ dependencies = [
     "typer",
     "requests",
     "psutil",
-    "cryptography"
+    "cryptography",
+    "docker>=6.0.0",
+    "kubernetes>=28.0.0"
 ]
 
 [project.scripts]
