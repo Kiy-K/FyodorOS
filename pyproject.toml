@@ -34,3 +34,26 @@ fyodor = "fyodoros.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Include NASM runtime binaries in the package
+[tool.setuptools.package-data]
+fyodoros = [
+    "runtime/nasm/linux-x64/*",
+    "runtime/nasm/darwin-x64/*",
+    "runtime/nasm/darwin-arm64/*",
+    "runtime/nasm/win-x64/*",
+    "extensions/*.so",
+    "extensions/*.dll",
+    "extensions/*.dylib",
+]
+
+# Exclude development and build artifacts
+[tool.setuptools.exclude-package-data]
+"*" = [
+    "*.pyc",
+    "*.pyo",
+    "__pycache__",
+    "*.c",
+    "*.cpp",
+    "*.h",
+]
