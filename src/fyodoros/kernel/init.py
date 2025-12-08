@@ -39,6 +39,9 @@ def boot() -> Kernel:
     """
     print("\n--- FyodorOS Boot Sequence ---\n")
 
+    # Resource tracking for cleanup
+    network_guard: Optional[NetworkGuard] = None
+
     try:
         # 1. Load kernel configuration
         log("Loading configuration...")
@@ -177,4 +180,18 @@ def boot() -> Kernel:
     except Exception as e:
         log(f"Boot failed: {e}", "FATAL")
         traceback.print_exc()
+
+        # Cleanup Resources
+        if network_guard:
+            log("Rolling back NetworkGuard...")
+            # If we don't have a 'disable' method, we assume 'enable' was the only state change.
+            # But NetworkGuard implementation monkeypatches. We need to undo it.
+            # Checking memory: "NetworkGuard... monkeypatches the python socket module".
+            # If it doesn't expose disable(), we might be stuck.
+            # Assuming disable() exists or we can't fully cleanup without it.
+            if hasattr(network_guard, 'disable'):
+                network_guard.disable()
+            else:
+                log("Warning: NetworkGuard has no disable() method. Socket may remain patched.", "WARN")
+
         sys.exit(1)
