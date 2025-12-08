@@ -1,0 +1,14 @@
+{
+  "root": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$VrVG/3RXMbfmrUxmK1ZTqw$CwfdIuQNbKWFJPqyyynyWaVgO1GG58K4tliyC4vK0Qw",
+    "roles": [
+      "admin"
+    ]
+  },
+  "guest": {
+    "password": "$argon2id$v=19$m=65536,t=3,p=4$Y6Y5YwgyHGrvX76th7ZExA$akWP+ptzambs81ErXuuWTNaWmK2QzvwaLTHjssta+6w",
+    "roles": [
+      "user"
+    ]
+  }
+}
