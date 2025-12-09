@@ -9,8 +9,13 @@
 
 ### Fixed
 - **Kernel**: Added graceful `shutdown()` method to orchestrate subsystem teardown.
+- **Service Manager**: Renamed from Supervisor; completely re-architected with:
+    - **Dependency Management**: DAG-based topological sort for correct startup/shutdown order.
+    - **3-Phase Shutdown**: Warning -> Graceful -> Force protocol.
+    - **Threaded Timeouts**: Non-blocking shutdown with configurable per-service timeouts.
+    - **State Machine**: Explicit state tracking (WARNING, GRACEFUL, FORCE, CLEANUP).
 - **Supervisor**: Implemented `shutdown()` to stop services in LIFO order and clear process registry.
-- **Plugin Loader**: Implemented `teardown()` to safely stop active plugins.
+- **Plugin Loader**: Implemented `teardown()` and shutdown hooks (`on_shutdown_warning`, `on_shutdown`) to safely stop active plugins.
 - **Sandbox**: Patched a security vulnerability where missing C++ core allowed relative path traversal (e.g., `../../etc/passwd`). Added secure Python fallback.
 
 ## [0.5.1] - 2025-12-08

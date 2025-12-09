@@ -13,7 +13,7 @@ from .scheduler import Scheduler
 from .users import UserManager
 from .network import NetworkManager, NetworkGuard
 from .sandbox import AgentSandbox
-from fyodoros.supervisor.supervisor import Supervisor
+from fyodoros.servicemanager.servicemanager import ServiceManager
 from fyodoros.kernel.plugin_loader import PluginLoader
 
 
@@ -31,7 +31,7 @@ class Kernel:
         network_guard (NetworkGuard): Security enforcement for network access.
         sys (SyscallHandler): System call interface.
         sandbox (AgentSandbox): Sandboxed environment for agents.
-        supervisor (Supervisor): Process and service supervisor.
+        service_manager (ServiceManager): Process and service supervisor.
         plugin_loader (PluginLoader): Plugin management system.
         shell: The shell instance (optional).
     """
@@ -42,7 +42,7 @@ class Kernel:
         network_manager: Optional[NetworkManager] = None,
         syscall_handler: Optional[SyscallHandler] = None,
         sandbox: Optional[AgentSandbox] = None,
-        supervisor: Optional[Supervisor] = None,
+        service_manager: Optional[ServiceManager] = None,
         network_guard: Optional[NetworkGuard] = None,
     ):
         """
@@ -79,8 +79,8 @@ class Kernel:
             self.sandbox = AgentSandbox(self.sys)
             self.sys.set_sandbox(self.sandbox)
 
-        # Supervisor
-        self.supervisor = supervisor if supervisor else Supervisor(self.scheduler, self.sys)
+        # Service Manager
+        self.service_manager = service_manager if service_manager else ServiceManager(self.scheduler, self.sys)
 
         # Plugins
         self.plugin_loader = PluginLoader(self)
@@ -101,7 +101,7 @@ class Kernel:
         if self.shell:
             shell = self.shell
         else:
-            shell = Shell(self.sys, self.supervisor)
+            shell = Shell(self.sys, self.service_manager)
             # Inject plugin commands
             shell.register_plugin_commands(self.plugin_loader.get_all_shell_commands())
 
@@ -112,18 +112,33 @@ class Kernel:
     def shutdown(self):
         """
         Gracefully shut down the kernel and its subsystems.
+        Enforces correct teardown order: Scheduler -> Plugins -> Services -> Network.
+        Follows the 3-phase shutdown protocol (Warning -> Graceful -> Force).
         """
         print("\n--- FyodorOS Shutdown Sequence ---")
 
-        # 1. Stop Services
-        if self.supervisor:
-            self.supervisor.shutdown()
+        # 1. Stop Scheduler from accepting new tasks
+        if self.scheduler:
+            self.scheduler.shutdown()
+            # If we were fully threaded, we'd call scheduler.stop() here too,
+            # but since we might be running inside it or it drives us, we just lock the gate.
 
-        # 2. Teardown Plugins
+        # 2. Warning Phase (Broadcast to plugins)
+        # We define a grace period (e.g. 3s)
+        grace_period = 3.0
         if self.plugin_loader:
-            self.plugin_loader.teardown()
+            self.plugin_loader.on_shutdown_warning(grace_period)
 
-        # 3. Disable Network Guard (Release patches)
+        # 3. Teardown Plugins (Graceful)
+        if self.plugin_loader:
+            self.plugin_loader.on_shutdown()
+
+        # 4. Stop Services (The big wait)
+        if self.service_manager:
+            # We pass the rest of the grace period logic to service manager
+            self.service_manager.shutdown(timeout=10.0, grace_period=0) # We already warned plugins
+
+        # 5. Disable Network Guard (Release patches)
         if self.network_guard:
             self.network_guard.disable()
 

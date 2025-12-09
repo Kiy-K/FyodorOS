@@ -49,3 +49,26 @@ class Plugin(ABC):
             list: A list of tool definitions (structure depends on Agent implementation).
         """
         return []
+
+    def on_shutdown_warning(self, grace_period: float):
+        """
+        Called when a shutdown is imminent.
+
+        Args:
+            grace_period (float): Seconds remaining before shutdown begins.
+        """
+        pass
+
+    def on_shutdown(self):
+        """
+        Called during graceful shutdown phase.
+        Plugins should clean up resources here.
+        """
+        pass
+
+    def on_force_shutdown(self):
+        """
+        Called during force shutdown phase.
+        Emergency cleanup only.
+        """
+        pass

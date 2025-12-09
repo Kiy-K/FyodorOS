@@ -86,16 +86,41 @@ class PluginLoader:
             tools.extend(plugin.get_agent_tools())
         return tools
 
+    def on_shutdown_warning(self, grace_period: float):
+        """
+        Notify all plugins of impending shutdown.
+        """
+        for name, plugin in self.loaded_plugins.items():
+            try:
+                plugin.on_shutdown_warning(grace_period)
+            except Exception as e:
+                print(f"[PluginLoader] Error in {name}.on_shutdown_warning: {e}")
+
+    def on_shutdown(self):
+        """
+        Graceful shutdown for all plugins.
+        """
+        for name, plugin in self.loaded_plugins.items():
+            try:
+                plugin.on_shutdown()
+            except Exception as e:
+                print(f"[PluginLoader] Error in {name}.on_shutdown: {e}")
+
+    def on_force_shutdown(self):
+        """
+        Force shutdown for all plugins.
+        """
+        for name, plugin in self.loaded_plugins.items():
+            try:
+                plugin.on_force_shutdown()
+            except Exception as e:
+                print(f"[PluginLoader] Error in {name}.on_force_shutdown: {e}")
+
     def teardown(self):
         """
         Teardown all loaded plugins.
+        (Legacy wrapper for on_shutdown/on_force_shutdown logic if needed,
+        but kept for backward compatibility).
         """
-        for plugin_name, plugin_instance in self.loaded_plugins.items():
-            if hasattr(plugin_instance, "teardown"):
-                try:
-                    plugin_instance.teardown()
-                    print(f"[PluginLoader] Teardown {plugin_name}")
-                except Exception as e:
-                    print(f"[PluginLoader] Error tearing down {plugin_name}: {e}")
-
+        self.on_shutdown()
         self.loaded_plugins.clear()
