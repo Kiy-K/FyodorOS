@@ -36,6 +36,18 @@ class Scheduler:
         print("[scheduler] Entering shutdown phase - rejecting new processes")
         self.accepting_new = False
 
+    def stop(self):
+        """
+        Stop the scheduler loop.
+        """
+        self.running = False
+
+    def is_running(self):
+        """
+        Check if scheduler loop is active.
+        """
+        return self.running
+
     def add(self, process):
         """
         Add a process to the scheduler.

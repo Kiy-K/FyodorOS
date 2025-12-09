@@ -112,27 +112,33 @@ class Kernel:
     def shutdown(self):
         """
         Gracefully shut down the kernel and its subsystems.
-        Enforces correct teardown order: Scheduler -> Services -> Plugins -> Network.
+        Enforces correct teardown order: Scheduler -> Plugins -> Services -> Network.
+        Follows the 3-phase shutdown protocol (Warning -> Graceful -> Force).
         """
         print("\n--- FyodorOS Shutdown Sequence ---")
 
-        # 1. Stop Scheduler (Prevent new tasks)
+        # 1. Stop Scheduler from accepting new tasks
         if self.scheduler:
-            if hasattr(self.scheduler, 'shutdown'):
-                self.scheduler.shutdown()
-            else:
-                # Fallback if scheduler doesn't have shutdown yet (legacy)
-                pass
+            self.scheduler.shutdown()
+            # If we were fully threaded, we'd call scheduler.stop() here too,
+            # but since we might be running inside it or it drives us, we just lock the gate.
 
-        # 2. Stop Services
-        if self.service_manager:
-            self.service_manager.shutdown()
-
-        # 3. Teardown Plugins
+        # 2. Warning Phase (Broadcast to plugins)
+        # We define a grace period (e.g. 3s)
+        grace_period = 3.0
         if self.plugin_loader:
-            self.plugin_loader.teardown()
+            self.plugin_loader.on_shutdown_warning(grace_period)
 
-        # 4. Disable Network Guard (Release patches)
+        # 3. Teardown Plugins (Graceful)
+        if self.plugin_loader:
+            self.plugin_loader.on_shutdown()
+
+        # 4. Stop Services (The big wait)
+        if self.service_manager:
+            # We pass the rest of the grace period logic to service manager
+            self.service_manager.shutdown(timeout=10.0, grace_period=0) # We already warned plugins
+
+        # 5. Disable Network Guard (Release patches)
         if self.network_guard:
             self.network_guard.disable()
 
