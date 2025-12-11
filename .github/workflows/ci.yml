@@ -19,7 +19,9 @@ jobs:
           pip install pytest coverage pytest-cov pytest-mock
 
       - name: Run Tests
-        run: pytest -q
+        run: |
+          export PYTHONPATH=$PYTHONPATH:.
+          pytest -q
 
       - name: Generate Coverage
         run: coverage xml
