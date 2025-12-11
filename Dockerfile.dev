@@ -1,0 +1,46 @@
+FROM python:3.11-alpine
+
+# Install all dependencies including dev tools
+RUN apk add --no-cache \
+    bash \
+    vim \
+    git \
+    gcc \
+    g++ \
+    make \
+    gdb \
+    strace \
+    nasm \
+    chromium \
+    chromium-chromedriver
+
+WORKDIR /fyodoros
+
+# Install Python dev dependencies
+RUN pip install --no-cache-dir \
+    build \
+    pytest \
+    pytest-cov \
+    pytest-mock \
+    ipython
+
+# Set environment for development
+ENV PYTHONUNBUFFERED=1 \
+    FYODOR_DEBUG=1 \
+    FYODOR_HOME=/root/.fyodor \
+    FYODOR_INTERACTIVE=true
+
+# Copy source (will be overridden by volume mount)
+COPY . .
+
+# Install in development mode
+RUN pip install -e .
+
+# Install playwright
+RUN playwright install chromium --with-deps || true
+
+# Create directories
+RUN mkdir -p /root/.fyodor /var/log/fyodoros /tmp/fyodoros
+
+# Default to bash for development
+ENTRYPOINT ["/bin/bash"]
