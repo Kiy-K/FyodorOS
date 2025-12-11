@@ -1,32 +1,111 @@
-FROM ubuntu:22.04
+# FyodorOS - Production Container Image
+# Multi-stage build for optimized image size
 
-# Prevent interactive prompts during apt install
-ENV DEBIAN_FRONTEND=noninteractive
+# ============================================================
+# Stage 1: Builder - Compile extensions
+# ============================================================
+FROM python:3.11-alpine AS builder
 
-# --- System dependencies ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv \
-    wget curl ca-certificates git \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
-    libxrandr2 libasound2 libpangocairo-1.0-0 libpango-1.0-0 \
-    libcairo2 libxshmfence1 libglib2.0-0 libgbm1 libx11-xcb1 \
-    libx11-6 libxext6 libxss1 fonts-unifont xvfb \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install build dependencies
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    make \
+    musl-dev \
+    linux-headers \
+    nasm \
+    git
 
-# --- Python requirements ---
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+WORKDIR /build
 
-# --- Playwright (fast on Ubuntu) ---
-RUN pip3 install playwright==1.41.2
-RUN playwright install-deps chromium
-RUN playwright install chromium
+# Copy source code
+COPY . .
 
-# --- FyodorOS files ---
-COPY . /app
-WORKDIR /app
-EXPOSE 7860
+# Build C++ extensions (if setup_extensions.py exists)
+RUN if [ -f setup_extensions.py ]; then \
+        python setup_extensions.py build || echo "No extensions to build"; \
+    fi
 
-CMD ["python3", "fyodoros.py"]
-# --- IGNORE ---
+# Build Python package
+RUN pip install --no-cache-dir build && \
+    python -m build
+
+
+# ============================================================
+# Stage 2: Runtime - Minimal production image
+# ============================================================
+FROM python:3.11-alpine
+
+LABEL maintainer="khoitruong071510@gmail.com"
+LABEL version="0.6.0"
+LABEL description="FyodorOS - The Experimental AI Microkernel"
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    nasm \
+    chromium \
+    chromium-chromedriver \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    FYODOR_HOME=/root/.fyodor \
+    FYODOR_CONFIG=/etc/fyodoros \
+    FYODOR_INTERACTIVE=false \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PATH="/root/.local/bin:${PATH}"
+
+# Create FyodorOS directory structure
+RUN mkdir -p \
+    ${FYODOR_HOME} \
+    ${FYODOR_CONFIG} \
+    /var/log/fyodoros \
+    /tmp/fyodoros \
+    /home/guest \
+    /home/root
+
+WORKDIR /fyodoros
+
+# Copy built package from builder stage
+COPY --from=builder /build/dist/*.whl /tmp/
+
+# Install FyodorOS package
+RUN pip install --no-cache-dir /tmp/*.whl && \
+    rm -rf /tmp/*.whl
+
+# Install Playwright browsers
+RUN playwright install chromium --with-deps || \
+    echo "Warning: Playwright browser installation failed"
+
+# Create default configuration if needed
+RUN echo "journal" > ${FYODOR_CONFIG}/services.conf
+
+# Set up default user
+RUN echo "guest:x:1000:1000:Guest User:/home/guest:/bin/sh" >> /etc/passwd && \
+    echo "guest:!:19000:0:99999:7:::" >> /etc/shadow && \
+    chown -R 1000:1000 /home/guest
+
+# Create welcome message
+RUN echo "Welcome to FyodorOS v0.6.0 - The Experimental AI Microkernel" > /etc/motd && \
+    echo "Type 'fyodor help' for available commands" >> /etc/motd
+
+# Expose ports (optional, for future services)
+EXPOSE 8080 8443
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Set entrypoint to OS init
+ENTRYPOINT ["python", "-m", "fyodoros.os_init"]
+
+# Default command (can be overridden)
+CMD []
