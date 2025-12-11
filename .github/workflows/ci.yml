@@ -21,7 +21,7 @@ jobs:
       - name: Run Tests
         run: |
           export PYTHONPATH=$PYTHONPATH:.
-          pytest -q
+          pytest --cov=src/fyodoros -q
 
       - name: Generate Coverage
         run: coverage xml
