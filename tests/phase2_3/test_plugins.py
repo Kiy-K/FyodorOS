@@ -17,6 +17,9 @@ class MockPlugin:
     def teardown(self):
         self.active = False
 
+    def on_shutdown(self):
+        self.teardown()
+
 @pytest.fixture
 def kernel_mock():
     return MagicMock()
