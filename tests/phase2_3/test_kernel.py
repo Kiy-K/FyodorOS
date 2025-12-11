@@ -16,7 +16,7 @@ def test_deterministic_boot():
          patch("fyodoros.kernel.init.NetworkGuard") as MockGuard, \
          patch("fyodoros.kernel.init.SyscallHandler") as MockSys, \
          patch("fyodoros.kernel.init.AgentSandbox") as MockSand, \
-         patch("fyodoros.kernel.init.Supervisor") as MockSuper, \
+         patch("fyodoros.kernel.init.ServiceManager") as MockSuper, \
          patch("fyodoros.kernel.init.PluginLoader") as MockLoader, \
          patch("fyodoros.kernel.init.Shell") as MockShell:
 
@@ -81,7 +81,7 @@ def test_controlled_shutdown():
     k = Kernel()
 
     # Mock subsystems
-    k.supervisor = MagicMock()
+    k.service_manager = MagicMock()
     k.plugin_loader = MagicMock()
     k.network_guard = MagicMock()
 
@@ -89,7 +89,7 @@ def test_controlled_shutdown():
         k.shutdown()
 
         # Verify propagation
-        assert k.supervisor.shutdown.called
+        assert k.service_manager.shutdown.called
         # Plugin loader shutdown?
         # assert k.plugin_loader.shutdown.called
         # Network guard disable?
