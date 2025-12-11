@@ -40,25 +40,10 @@ def main(args, sys):
 
     # Let's assume syscalls will be added.
     if cmd == "list":
-        # We can use dom state or add sys_user_list
-        # sys.sys_get_state includes users list? Yes.
-        # But let's ask for specific list syscall if we want to follow pattern.
-        # For now, rely on sys_get_state() or the one we added in UserManager.
-        # Wait, sys_get_state calls user_manager.list_users()
         try:
-             # This is a bit of a hack: re-using get_state to list users
-             # Wait, sys_get_state isn't returning users in my implementation yet?
-             # I need to check kernel/dom.py or syscalls.py
-
-             # In syscalls.py:
-             # def sys_get_state(self): ... returns processes, cwd.
-             # In dom.py it was adding users.
-
-             # Let's assume we update syscalls.py to expose user management.
              if hasattr(sys, "sys_user_list"):
                  return json.dumps({"users": sys.sys_user_list()})
              else:
-                 # Fallback
                  return json.dumps({"error": "User listing not supported by kernel yet."})
 
         except Exception as e:
