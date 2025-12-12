@@ -6,10 +6,8 @@ FyodorOS is an experimental AI microkernel. We take security seriously, especial
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.5.x   | :white_check_mark: |
-| 0.4.x   | :white_check_mark: |
-| 0.3.x   | :x:                |
-| < 0.3.0 | :x:                |
+| 0.7.x   | :white_check_mark: |
+| < 0.7.0 | :x:                |
 
 ## Security Considerations
 
@@ -84,8 +82,8 @@ As an experimental OS, FyodorOS has known limitations:
 ## Security Updates
 
 Security patches will be released as:
-- Patch versions (e.g., 0.4.1) for minor issues
-- Minor versions (e.g., 0.5.0) for significant security enhancements
+- Patch versions (e.g., 0.7.1) for minor issues
+- Minor versions (e.g., 0.8.0) for significant security enhancements
 
 Subscribe to releases on GitHub to stay notified.
 
