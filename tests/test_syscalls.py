@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from fyodoros.kernel.syscalls import SyscallHandler
 from fyodoros.kernel.users import UserManager
 
+
 @pytest.fixture
 def syscall_handler():
     # Mock dependencies
@@ -21,7 +22,11 @@ def syscall_handler():
     mock_user_manager.authenticate.return_value = True
     mock_user_manager.has_permission.return_value = True
 
-    handler = SyscallHandler(scheduler=mock_scheduler, user_manager=mock_user_manager, network_manager=mock_net)
+    handler = SyscallHandler(
+        scheduler=mock_scheduler,
+        user_manager=mock_user_manager,
+        network_manager=mock_net,
+    )
 
     # Mock the internal filesystem if needed, but SyscallHandler creates its own FileSystem()
     # We should mock `fyodoros.kernel.syscalls.FileSystem` if we want to mock FS calls.
@@ -30,17 +35,25 @@ def syscall_handler():
 
     return handler
 
+
 def test_sys_ls(syscall_handler):
     syscall_handler.fs.list_dir.return_value = ["file1", "file2"]
-    syscall_handler.fs.get_node_type.return_value = "dir"
 
     result = syscall_handler.sys_ls("/home")
     assert result == ["file1", "file2"]
 
     # Test reading non-existent
-    syscall_handler.fs.get_node_type.return_value = None
+    # sys_ls now catches KeyError from fs.list_dir (via _resolve)
+    syscall_handler.fs.list_dir.side_effect = KeyError("Path not found")
     with pytest.raises(FileNotFoundError):
         syscall_handler.sys_ls("/nonexistent")
+
+    # Test listing a file (not a directory)
+    # sys_ls catches ValueError from fs.list_dir
+    syscall_handler.fs.list_dir.side_effect = ValueError("Not a directory")
+    result = syscall_handler.sys_ls("/somefile")
+    assert result == ["somefile"]
+
 
 def test_sys_write_read(syscall_handler):
     # Ensure _get_current_uid returns a string "root" instead of a Mock object
@@ -58,13 +71,18 @@ def test_sys_write_read(syscall_handler):
     # sys_write
     syscall_handler.sys_write("/test.txt", "data")
     # Updated expectation: FS now expects groups arg
-    syscall_handler.fs.write_file.assert_called_with("/test.txt", "data", "root", ['root', 'admin'])
+    syscall_handler.fs.write_file.assert_called_with(
+        "/test.txt", "data", "root", ["root", "admin"]
+    )
 
     # sys_read
     syscall_handler.fs.read_file.return_value = "data"
     assert syscall_handler.sys_read("/test.txt") == "data"
     # Updated expectation: FS now expects groups arg
-    syscall_handler.fs.read_file.assert_called_with("/test.txt", "root", ['root', 'admin'])
+    syscall_handler.fs.read_file.assert_called_with(
+        "/test.txt", "root", ["root", "admin"]
+    )
+
 
 def test_sys_docker_calls(syscall_handler):
     # Setup docker interface mock
@@ -82,6 +100,7 @@ def test_sys_docker_calls(syscall_handler):
         res = syscall_handler.sys_docker_run("alpine")
         assert res["success"] is False
         assert "Permission Denied" in res["error"]
+
 
 def test_sys_reboot(syscall_handler):
     syscall_handler.scheduler.exit_reason = None

@@ -29,6 +29,7 @@ class SyscallHandler:
         network_manager (NetworkManager): Network management system.
         sandbox (AgentSandbox): The sandbox instance (optional).
     """
+
     def __init__(self, scheduler=None, user_manager=None, network_manager=None):
         """
         Initialize the SyscallHandler.
@@ -102,7 +103,8 @@ class SyscallHandler:
             bool: True if successful, False otherwise.
         """
         # Only root can add users?
-        if self._get_current_uid() != "root": return False
+        if self._get_current_uid() != "root":
+            return False
         return self.user_manager.add_user(user, password)
 
     def sys_user_delete(self, user):
@@ -115,7 +117,8 @@ class SyscallHandler:
         Returns:
             bool: True if successful, False otherwise.
         """
-        if self._get_current_uid() != "root": return False
+        if self._get_current_uid() != "root":
+            return False
         return self.user_manager.delete_user(user)
 
     def _get_current_uid(self):
@@ -127,7 +130,7 @@ class SyscallHandler:
         """
         if self.scheduler and self.scheduler.current_process:
             return self.scheduler.current_process.uid
-        return "root" # Kernel/System context
+        return "root"  # Kernel/System context
 
     def _get_current_groups(self):
         """
@@ -173,24 +176,20 @@ class SyscallHandler:
 
         # Fallback to In-Memory
         uid = self._get_current_uid()
-        node_type = self.fs.get_node_type(path)
-
         groups = self._get_current_groups()
-        if node_type == 'dir':
-            return self.fs.list_dir(path, uid, groups)
-        elif node_type == 'file':
-            # Verify read permission by trying to read?
-            # Or just assume ls permission implies seeing the name.
-            # But standard ls requires access to parent.
-            # self.fs.list_dir checks 'r' on directory.
-            # Here we just return the name if it exists as file.
-            return [path.split("/")[-1]]
-        elif node_type is None:
-            # Not found
-            raise FileNotFoundError(f"Path not found: {path}")
 
-        # Should not happen
-        raise ValueError("Unknown node type")
+        try:
+            # Optimization: Try to list directory directly to avoid double path resolution.
+            # FileSystem.list_dir resolves the path once.
+            return self.fs.list_dir(path, uid, groups)
+        except ValueError:
+            # FileSystem.list_dir raises ValueError if the resolved node is not a DirectoryNode.
+            # This means the path exists but is a file.
+            # We return the filename, preserving original behavior (no explicit read perm check on file for ls).
+            return [os.path.basename(path)]
+        except KeyError:
+            # FileSystem._resolve raises KeyError if the path does not exist.
+            raise FileNotFoundError(f"Path not found: {path}")
 
     def sys_read(self, path):
         """
@@ -204,7 +203,7 @@ class SyscallHandler:
         """
         is_sb, real_path = self._resolve_sandbox_path(path)
         if is_sb and os.path.exists(real_path) and os.path.isfile(real_path):
-            with open(real_path, 'r') as f:
+            with open(real_path, "r") as f:
                 return f.read()
 
         uid = self._get_current_uid()
@@ -228,7 +227,7 @@ class SyscallHandler:
             parent = os.path.dirname(real_path)
             if not os.path.exists(parent):
                 os.makedirs(parent)
-            with open(real_path, 'w') as f:
+            with open(real_path, "w") as f:
                 f.write(data)
             self.sys_log(f"[fs-sandbox] write {path}")
             return True
@@ -256,7 +255,7 @@ class SyscallHandler:
             parent = os.path.dirname(real_path)
             if not os.path.exists(parent):
                 os.makedirs(parent)
-            with open(real_path, 'a') as f:
+            with open(real_path, "a") as f:
                 f.write(text + "\n")
             return True
 
@@ -279,7 +278,7 @@ class SyscallHandler:
         if is_sb:
             try:
                 if os.path.isdir(real_path):
-                    os.rmdir(real_path) # Only empty
+                    os.rmdir(real_path)  # Only empty
                 else:
                     os.remove(real_path)
                 self.sys_log(f"[fs-sandbox] delete {path}")
@@ -310,15 +309,16 @@ class SyscallHandler:
         Returns:
             bool: True if signal sent, False otherwise.
         """
-        if not self.scheduler: return False
+        if not self.scheduler:
+            return False
 
         current_uid = self._get_current_uid()
 
         for p in self.scheduler.processes:
             if p.pid == pid:
                 if current_uid != "root" and p.uid != current_uid:
-                     self.sys_log(f"kill denied for {current_uid} on {pid}")
-                     return False
+                    self.sys_log(f"kill denied for {current_uid} on {pid}")
+                    return False
 
                 p.deliver_signal(sig)
                 self.sys_log(f"signal {sig} to {pid}")
@@ -336,7 +336,8 @@ class SyscallHandler:
         Returns:
             bool: True if sent, False otherwise.
         """
-        if not self.scheduler: return False
+        if not self.scheduler:
+            return False
         for p in self.scheduler.processes:
             if p.pid == pid:
                 p.send(message)
@@ -362,16 +363,19 @@ class SyscallHandler:
         Returns:
             list[dict]: A list of process details.
         """
-        if not self.scheduler: return []
+        if not self.scheduler:
+            return []
         out = []
         for p in self.scheduler.processes:
-            out.append({
-                "pid": p.pid,
-                "name": p.name,
-                "state": p.state.name,
-                "cpu": p.cpu_time,
-                "uid": p.uid
-            })
+            out.append(
+                {
+                    "pid": p.pid,
+                    "name": p.name,
+                    "state": p.state.name,
+                    "cpu": p.cpu_time,
+                    "uid": p.uid,
+                }
+            )
         return out
 
     # Network Control
@@ -396,7 +400,9 @@ class SyscallHandler:
             bool: True if successful, False if denied.
         """
         user = self._get_current_uid()
-        if user != "root" and not self.user_manager.has_permission(user, "manage_network"):
+        if user != "root" and not self.user_manager.has_permission(
+            user, "manage_network"
+        ):
             return False
 
         enable = str(status).lower() in ("true", "1", "on", "yes", "enable")
@@ -427,7 +433,9 @@ class SyscallHandler:
             dict: The execution result or error.
         """
         user = self._get_current_uid()
-        if user != "root" and not self.user_manager.has_permission(user, "execute_code"):
+        if user != "root" and not self.user_manager.has_permission(
+            user, "execute_code"
+        ):
             return {"error": "Permission Denied"}
 
         if not self.sandbox:
@@ -446,7 +454,9 @@ class SyscallHandler:
             return True
         return self.user_manager.has_permission(user, "manage_docker")
 
-    def sys_docker_login(self, username, password, registry="https://index.docker.io/v1/"):
+    def sys_docker_login(
+        self, username, password, registry="https://index.docker.io/v1/"
+    ):
         """
         Log in to a Docker registry.
 
@@ -459,7 +469,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.login(username, password, registry)
         except Exception as e:
@@ -476,11 +489,14 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.logout(registry)
         except Exception as e:
-             return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e)}
 
     def sys_docker_build(self, path, tag, dockerfile="Dockerfile"):
         """
@@ -495,7 +511,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.build_image(path, tag, dockerfile)
         except Exception as e:
@@ -515,7 +534,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
 
         # Agent might send JSON strings
         try:
@@ -525,7 +547,10 @@ class SyscallHandler:
                 env = json.loads(env)
             return self.docker_interface.run_container(image, name, ports, env)
         except json.JSONDecodeError as e:
-            return {"success": False, "error": f"Invalid JSON format for ports/env: {str(e)}"}
+            return {
+                "success": False,
+                "error": f"Invalid JSON format for ports/env: {str(e)}",
+            }
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -540,7 +565,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.list_containers(all=all)
         except Exception as e:
@@ -557,7 +585,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.stop_container(container_id)
         except Exception as e:
@@ -575,7 +606,10 @@ class SyscallHandler:
             dict: Success status or error.
         """
         if not self._check_docker_permission():
-            return {"success": False, "error": "Permission Denied: manage_docker required"}
+            return {
+                "success": False,
+                "error": "Permission Denied: manage_docker required",
+            }
         try:
             return self.docker_interface.get_logs(container_id, tail)
         except Exception as e:
@@ -605,7 +639,9 @@ class SyscallHandler:
         if not self._check_k8s_permission():
             return {"success": False, "error": "Permission Denied: manage_k8s required"}
         try:
-            return self.k8s_interface.create_deployment(name, image, replicas, namespace)
+            return self.k8s_interface.create_deployment(
+                name, image, replicas, namespace
+            )
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -719,7 +755,7 @@ class SyscallHandler:
         """
         state = {
             "processes": self.sys_proc_list(),
-            "cwd": self.sys_ls("/") # Root for now, but should be caller CWD if known
+            "cwd": self.sys_ls("/"),  # Root for now, but should be caller CWD if known
         }
         return state
 
@@ -739,7 +775,7 @@ class SyscallHandler:
         try:
             self.fs.append_file("/var/log/journal/kernel.log", line, "root")
         except:
-            pass # Boot time issues
+            pass  # Boot time issues
         return True
 
     # Memory System
