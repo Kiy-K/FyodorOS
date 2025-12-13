@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.scripts]
-fyodor = "fyodoros.cli:app"
+fyodor = "fyodoros.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
