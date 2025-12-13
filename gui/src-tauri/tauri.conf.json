@@ -17,10 +17,20 @@
         "all": false,
         "open": true,
         "execute": true,
-        "sidecar": true
+        "sidecar": true,
+        "scope": [
+          {
+            "name": "fyodor-kernel",
+            "sidecar": true,
+            "args": ["serve", "--port", "0"]
+          }
+        ]
       }
     },
     "bundle": {
+      "externalBin": [
+        "bin/fyodor-kernel"
+      ],
       "active": true,
       "targets": "all",
       "identifier": "com.fyodoros.gui",

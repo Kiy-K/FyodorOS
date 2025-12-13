@@ -67,14 +67,30 @@ def start(args):
     print("Booting FyodorOS Shell...")
     try:
         kernel = boot.boot()
-        if hasattr(kernel, "shell") and kernel.shell:
-            kernel.shell.run()
-        else:
-            # Fallback
-            shell = Shell(kernel.sys, kernel.service_manager)
-            shell.run()
+        # In CLI mode, we use the default CLIAdapter which kernel creates if None passed
+        # boot() currently doesn't pass io_adapter, so kernel defaults to CLIAdapter
+
+        # We need to manually start the shell run loop, or let kernel.start() do it
+        # kernel.start() does exactly this.
+        kernel.start()
     except Exception as e:
         print(f"Startup failed: {e}")
+        sys.exit(1)
+
+def serve(args):
+    """
+    Start the FyodorOS API Server.
+    """
+    print(f"Starting FyodorOS Server on port {args.port}...")
+    try:
+        import uvicorn
+        # We run the app defined in fyodoros.server.main
+        uvicorn.run("fyodoros.server.main:app", host="0.0.0.0", port=args.port, reload=False)
+    except ImportError:
+        print("Error: uvicorn is not installed. Please install it to use server mode.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Server failed: {e}")
         sys.exit(1)
 
 def agent(args):
@@ -108,6 +124,11 @@ def main():
     # start
     parser_start = subparsers.add_parser("start", help="Start the shell")
     parser_start.set_defaults(func=start)
+
+    # serve
+    parser_serve = subparsers.add_parser("serve", help="Start the API server")
+    parser_serve.add_argument("--port", type=int, default=8000, help="Port to run server on")
+    parser_serve.set_defaults(func=serve)
 
     # agent
     parser_agent = subparsers.add_parser("agent", help="Run the AI Agent")

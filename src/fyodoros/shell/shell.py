@@ -31,16 +31,20 @@ class Shell:
         plugin_commands (dict): Registered commands from plugins.
     """
 
-    def __init__(self, syscall, service_manager=None):
+    def __init__(self, syscall, service_manager=None, io_adapter=None):
         """
         Initialize the Shell.
 
         Args:
             syscall (SyscallHandler): The system call interface.
             service_manager (ServiceManager, optional): The process supervisor.
+            io_adapter (IOAdapter, optional): I/O interface.
         """
+        from fyodoros.kernel.io import CLIAdapter
+
         self.sys = syscall
         self.service_manager = service_manager
+        self.io = io_adapter if io_adapter else CLIAdapter()
         self.cwd = "/"
         self.running = True
         self.current_user = None
@@ -67,8 +71,7 @@ class Shell:
         Returns:
             str: The user's input.
         """
-        print(prompt, end="", flush=True)
-        return input().strip()
+        return self.io.read(prompt, password=False).strip()
 
     def login(self, auto_user=None, auto_pass=None):
         """
@@ -89,22 +92,22 @@ class Shell:
 
         # If only user provided, ask for password
         if user and not pw:
-             print("FyodorOS Login")
-             print(f"Username: {user}")
-             pw = Prompt.ask("Password", password=True)
+             self.io.write("FyodorOS Login\n")
+             self.io.write(f"Username: {user}\n")
+             pw = self.io.read("Password", password=True)
 
         # If neither, interactive
         if not user:
-            print("FyodorOS Login")
-            user = Prompt.ask("Username")
-            pw = Prompt.ask("Password", password=True)
+            self.io.write("FyodorOS Login\n")
+            user = self.io.read("Username")
+            pw = self.io.read("Password", password=True)
 
         if self.sys.sys_login(user, pw):
-            print(f"Welcome {user}!")
+            self.io.write(f"Welcome {user}!\n")
             self.current_user = user
             return True
 
-        print("Login failed.")
+        self.io.write("Login failed.\n")
         return False
 
     # ========== COMMAND EXECUTION ==========
@@ -118,7 +121,7 @@ class Shell:
             cmd = self._readline(f"{self.current_user}@fyodoros:{self.cwd}> ")
             output = self.execute(cmd)
             if output:
-                print(output)
+                self.io.write(output + "\n")
             yield  # yield back to scheduler
 
     def execute(self, cmd):
@@ -233,10 +236,10 @@ class Shell:
 
                 # Lazy Init Agent
                 if not self.agent:
-                    print("[Shell] Initializing Agent Layer...")
+                    self.io.write("[Shell] Initializing Agent Layer...\n")
                     self.agent = ReActAgent(self.sys)
 
-                print(f"[Shell] Dispatching task to Agent: '{task}'")
+                self.io.write(f"[Shell] Dispatching task to Agent: '{task}'\n")
                 return self.agent.run(task)
 
             elif op == "help":
