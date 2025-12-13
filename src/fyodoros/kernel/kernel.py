@@ -7,7 +7,7 @@ OS (scheduler, users, network, etc.) and initializes them.
 """
 
 from typing import Optional
-from .tty import TTY
+from .io import IOAdapter, CLIAdapter
 from .syscall import SyscallHandler
 from .scheduler import Scheduler
 from .users import UserManager
@@ -24,7 +24,7 @@ class Kernel:
     Initializes and manages the lifecycle of core OS components.
 
     Attributes:
-        tty (TTY): Terminal device.
+        io (IOAdapter): Input/Output interface.
         scheduler (Scheduler): Process scheduler.
         user_manager (UserManager): User authentication and management.
         network_manager (NetworkManager): Network state management.
@@ -44,6 +44,7 @@ class Kernel:
         sandbox: Optional[AgentSandbox] = None,
         service_manager: Optional[ServiceManager] = None,
         network_guard: Optional[NetworkGuard] = None,
+        io_adapter: Optional[IOAdapter] = None,
     ):
         """
         Initialize the Kernel and all its subsystems.
@@ -52,7 +53,7 @@ class Kernel:
         they are initialized with defaults (Legacy Mode).
         """
         # low-level output/input
-        self.tty = TTY()
+        self.io = io_adapter if io_adapter else CLIAdapter()
 
         # Core Components
         self.scheduler = scheduler if scheduler else Scheduler()
@@ -101,7 +102,7 @@ class Kernel:
         if self.shell:
             shell = self.shell
         else:
-            shell = Shell(self.sys, self.service_manager)
+            shell = Shell(self.sys, self.service_manager, self.io)
             # Inject plugin commands
             shell.register_plugin_commands(self.plugin_loader.get_all_shell_commands())
 
@@ -115,7 +116,7 @@ class Kernel:
         Enforces correct teardown order: Scheduler -> Plugins -> Services -> Network.
         Follows the 3-phase shutdown protocol (Warning -> Graceful -> Force).
         """
-        print("\n--- FyodorOS Shutdown Sequence ---")
+        self.io.write("\n--- FyodorOS Shutdown Sequence ---\n")
 
         # 1. Stop Scheduler from accepting new tasks
         if self.scheduler:
@@ -142,4 +143,4 @@ class Kernel:
         if self.network_guard:
             self.network_guard.disable()
 
-        print("[Kernel] Shutdown complete.")
+        self.io.write("[Kernel] Shutdown complete.\n")

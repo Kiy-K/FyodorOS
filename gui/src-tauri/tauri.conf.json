@@ -17,7 +17,14 @@
         "all": false,
         "open": true,
         "execute": true,
-        "sidecar": true
+        "sidecar": true,
+        "scope": [
+          {
+            "name": "python3",
+            "cmd": "python3",
+            "args": ["-m", "fyodoros", "serve"]
+          }
+        ]
       }
     },
     "bundle": {
