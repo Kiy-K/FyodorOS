@@ -46,21 +46,47 @@ def test_permissions(fs):
     # Setup: Create a file owned by root
     fs.write_file("/etc/config", "secret", uid="root")
 
-    # Guest tries to read root file (should fail if strict, but code says owner check simple)
-    # Checking implementation: _check_perm returns True if owner==uid or if op in mode.
-    # Mode default is "rw".
-    # If I am guest, and file owner is root.
-    # _check_perm:
-    #   if uid == "root": return True
-    #   if node.permissions.owner == uid: ...
-    #   return False
-    # So guest cannot read root file unless world readable logic is added (which is TODO).
-
+    # Guest tries to read root file
+    # Default is now strict (world_mode=""), so this should fail
     with pytest.raises(PermissionError):
         fs.read_file("/etc/config", uid="guest")
 
     with pytest.raises(PermissionError):
         fs.write_file("/etc/config", "hacked", uid="guest")
+
+def test_world_readable(fs):
+    """Test that we can explicitly make a file world readable."""
+    # 1. Create file as root (secure by default)
+    fs.write_file("/public_info", "public data", uid="root")
+
+    # 2. Verify guest cannot read it
+    with pytest.raises(PermissionError):
+        fs.read_file("/public_info", uid="guest")
+
+    # 3. Make it world readable
+    fs.chmod("/public_info", world_mode="r", uid="root")
+
+    # 4. Verify guest CAN read it
+    content = fs.read_file("/public_info", uid="guest")
+    assert content == "public data"
+
+    # 5. Verify guest CANNOT write to it (only 'r' given)
+    with pytest.raises(PermissionError):
+        fs.write_file("/public_info", "overwrite", uid="guest")
+
+def test_chmod_permissions(fs):
+    """Test that only owner/root can chmod."""
+    fs.write_file("/home/guest/private", "data", uid="guest")
+
+    # Guest (owner) can chmod
+    fs.chmod("/home/guest/private", world_mode="r", uid="guest")
+
+    # Root can chmod
+    fs.chmod("/home/guest/private", world_mode="", uid="root")
+
+    # Another user cannot chmod
+    with pytest.raises(PermissionError):
+        fs.chmod("/home/guest/private", world_mode="r", uid="other")
 
 def test_list_dir(fs):
     fs.write_file("/home/guest/f1", "", uid="guest")
