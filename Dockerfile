@@ -1,111 +1,53 @@
-# FyodorOS - Production Container Image
-# Multi-stage build for optimized image size
+# Stage 1: Builder
+FROM python:3.10-slim AS builder
 
-# ============================================================
-# Stage 1: Builder - Compile extensions
-# ============================================================
-FROM python:3.11-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache \
+# Install system dependencies for Nuitka compilation
+# gcc: for compilation
+# ccache: to speed up recompilation (optional but good practice)
+# patchelf: required by Nuitka for standalone linux builds
+RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
-    make \
-    musl-dev \
-    linux-headers \
-    nasm \
-    git
+    ccache \
+    patchelf \
+    && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
+WORKDIR /app
 
-# Copy source code
+# Copy the entire repository
 COPY . .
 
-# Build C++ extensions (if setup_extensions.py exists)
-RUN if [ -f setup_extensions.py ]; then \
-        python setup_extensions.py build || echo "No extensions to build"; \
-    fi
+# Install dependencies from pyproject.toml (including nuitka, ordered-set)
+# This ensures the environment matches the project definition
+RUN pip install .
 
-# Build Python package
-RUN pip install --no-cache-dir build && \
-    python -m build
+# Build the kernel
+# The script outputs to gui/src-tauri/bin/fyodor-kernel
+RUN python scripts/build_kernel.py
 
+# Stage 2: Runtime
+FROM python:3.10-slim AS runtime
 
-# ============================================================
-# Stage 2: Runtime - Minimal production image
-# ============================================================
-FROM python:3.11-alpine
+# Create a non-root user
+RUN useradd -m -s /bin/bash fyodor
 
-LABEL maintainer="khoitruong071510@gmail.com"
-LABEL version="0.6.0"
-LABEL description="FyodorOS - The Experimental AI Microkernel"
+WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    bash \
-    curl \
-    git \
-    nasm \
-    chromium \
-    chromium-chromedriver \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    && rm -rf /var/cache/apk/*
+# Create the .fyodor directory structure with correct permissions
+RUN mkdir -p /home/fyodor/.fyodor && \
+    chown -R fyodor:fyodor /home/fyodor
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    FYODOR_HOME=/root/.fyodor \
-    FYODOR_CONFIG=/etc/fyodoros \
-    FYODOR_INTERACTIVE=false \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    PATH="/root/.local/bin:${PATH}"
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/gui/src-tauri/bin/fyodor-kernel /app/fyodor-kernel
 
-# Create FyodorOS directory structure
-RUN mkdir -p \
-    ${FYODOR_HOME} \
-    ${FYODOR_CONFIG} \
-    /var/log/fyodoros \
-    /tmp/fyodoros \
-    /home/guest \
-    /home/root
+# Set ownership of the app directory
+RUN chown fyodor:fyodor /app/fyodor-kernel
 
-WORKDIR /fyodoros
+# Switch to non-root user
+USER fyodor
 
-# Copy built package from builder stage
-COPY --from=builder /build/dist/*.whl /tmp/
+# Expose the default port (optional documentation)
+EXPOSE 8000
 
-# Install FyodorOS package
-RUN pip install --no-cache-dir /tmp/*.whl && \
-    rm -rf /tmp/*.whl
-
-# Install Playwright browsers
-RUN playwright install chromium --with-deps || \
-    echo "Warning: Playwright browser installation failed"
-
-# Create default configuration if needed
-RUN echo "journal" > ${FYODOR_CONFIG}/services.conf
-
-# Set up default user
-RUN echo "guest:x:1000:1000:Guest User:/home/guest:/bin/sh" >> /etc/passwd && \
-    echo "guest:!:19000:0:99999:7:::" >> /etc/shadow && \
-    chown -R 1000:1000 /home/guest
-
-# Create welcome message
-RUN echo "Welcome to FyodorOS v0.6.0 - The Experimental AI Microkernel" > /etc/motd && \
-    echo "Type 'fyodor help' for available commands" >> /etc/motd
-
-# Expose ports (optional, for future services)
-EXPOSE 8080 8443
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)" || exit 1
-
-# Set entrypoint to OS init
-ENTRYPOINT ["python", "-m", "fyodoros.os_init"]
-
-# Default command (can be overridden)
-CMD []
+# Entrypoint configuration
+# Serve on all interfaces (0.0.0.0) so Docker networking works
+ENTRYPOINT ["/app/fyodor-kernel", "serve", "--host", "0.0.0.0", "--port", "8000"]
