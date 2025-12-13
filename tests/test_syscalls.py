@@ -1,19 +1,13 @@
 import pytest
-from unittest.mock import Mock, patch
-from fyodoros.kernel.syscalls import SyscallHandler
+import os
+from unittest.mock import Mock, patch, mock_open
+from fyodoros.kernel.syscall import SyscallHandler
 from fyodoros.kernel.users import UserManager
 
 
 @pytest.fixture
 def syscall_handler():
     # Mock dependencies
-    # SyscallHandler.__init__ takes (scheduler, user_manager, network_manager)
-    # The error showed "takes from 1 to 4 positional arguments but 5 were given"
-    # because I passed 4 args + self = 5.
-    # The signature is `__init__(self, scheduler=None, user_manager=None, network_manager=None)`
-    # My previous call: `SyscallHandler(mock_fs, mock_proc, mock_net, mock_user_manager)` was definitely wrong
-    # because `mock_fs` is not an argument!
-
     mock_scheduler = Mock()
     mock_user_manager = Mock(spec=UserManager)
     mock_net = Mock()
@@ -22,66 +16,71 @@ def syscall_handler():
     mock_user_manager.authenticate.return_value = True
     mock_user_manager.has_permission.return_value = True
 
+    # Ensure default UID is set to avoid Mock object return in _get_current_uid
+    mock_scheduler.current_process.uid = "root"
+
     handler = SyscallHandler(
         scheduler=mock_scheduler,
         user_manager=mock_user_manager,
         network_manager=mock_net,
     )
 
-    # Mock the internal filesystem if needed, but SyscallHandler creates its own FileSystem()
-    # We should mock `fyodoros.kernel.syscalls.FileSystem` if we want to mock FS calls.
-    # Or replace handler.fs with a mock after init.
-    handler.fs = Mock()
-
     return handler
 
 
 def test_sys_ls(syscall_handler):
-    syscall_handler.fs.list_dir.return_value = ["file1", "file2"]
+    # Mock rootfs resolution and os.listdir
+    with patch("fyodoros.kernel.rootfs.resolve") as mock_resolve, \
+         patch("os.listdir") as mock_listdir:
 
-    result = syscall_handler.sys_ls("/home")
-    assert result == ["file1", "file2"]
+        mock_path = Mock()
+        mock_path.exists.return_value = True
+        mock_path.is_dir.return_value = True
+        mock_resolve.return_value = mock_path
 
-    # Test reading non-existent
-    # sys_ls now catches KeyError from fs.list_dir (via _resolve)
-    syscall_handler.fs.list_dir.side_effect = KeyError("Path not found")
-    with pytest.raises(FileNotFoundError):
-        syscall_handler.sys_ls("/nonexistent")
+        mock_listdir.return_value = ["file1", "file2"]
 
-    # Test listing a file (not a directory)
-    # sys_ls catches ValueError from fs.list_dir
-    syscall_handler.fs.list_dir.side_effect = ValueError("Not a directory")
-    result = syscall_handler.sys_ls("/somefile")
-    assert result == ["somefile"]
+        result = syscall_handler.sys_ls("/home")
+        assert result == ["file1", "file2"]
+
+        # Test reading non-existent
+        mock_path.exists.return_value = False
+        # To simulate raising FileNotFoundError inside sys_ls logic
+        # sys_ls calls real_path.exists(), if false it raises FileNotFoundError
+
+        with pytest.raises(FileNotFoundError):
+            syscall_handler.sys_ls("/nonexistent")
+
+        # Test listing a file (not a directory)
+        mock_path.exists.return_value = True
+        mock_path.is_dir.return_value = False
+        mock_path.name = "somefile"
+
+        result = syscall_handler.sys_ls("/somefile")
+        assert result == ["somefile"]
 
 
 def test_sys_write_read(syscall_handler):
-    # Ensure _get_current_uid returns a string "root" instead of a Mock object
-    # In SyscallHandler._get_current_uid:
-    # if self.scheduler and self.scheduler.current_process:
-    #    return self.scheduler.current_process.uid
+    # Mock rootfs resolution and open
+    with patch("fyodoros.kernel.rootfs.resolve") as mock_resolve, \
+         patch("builtins.open", mock_open(read_data="data")) as mock_file:
 
-    # The fixture sets syscall_handler.scheduler = Mock()
-    # So self.scheduler.current_process is a Mock()
-    # So self.scheduler.current_process.uid is a Mock()
+        mock_path = Mock()
+        mock_path.parent.mkdir = Mock()
+        mock_resolve.return_value = mock_path
 
-    # Fix: Set the uid explicitly
-    syscall_handler.scheduler.current_process.uid = "root"
+        # sys_write
+        syscall_handler.sys_write("/test.txt", "data")
 
-    # sys_write
-    syscall_handler.sys_write("/test.txt", "data")
-    # Updated expectation: FS now expects groups arg
-    syscall_handler.fs.write_file.assert_called_with(
-        "/test.txt", "data", "root", ["root", "admin"]
-    )
+        # Verify open was called with 'w'
+        mock_file.assert_any_call(mock_path, "w")
+        mock_file().write.assert_any_call("data")
 
-    # sys_read
-    syscall_handler.fs.read_file.return_value = "data"
-    assert syscall_handler.sys_read("/test.txt") == "data"
-    # Updated expectation: FS now expects groups arg
-    syscall_handler.fs.read_file.assert_called_with(
-        "/test.txt", "root", ["root", "admin"]
-    )
+        # sys_read
+        assert syscall_handler.sys_read("/test.txt") == "data"
+
+        # Verify open was called with 'r'
+        mock_file.assert_any_call(mock_path, "r")
 
 
 def test_sys_docker_calls(syscall_handler):
