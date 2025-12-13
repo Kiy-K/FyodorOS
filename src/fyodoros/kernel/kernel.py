@@ -8,7 +8,7 @@ OS (scheduler, users, network, etc.) and initializes them.
 
 from typing import Optional
 from .tty import TTY
-from .syscalls import SyscallHandler
+from .syscall import SyscallHandler
 from .scheduler import Scheduler
 from .users import UserManager
 from .network import NetworkManager, NetworkGuard

@@ -10,7 +10,7 @@ It handles permission checking and dispatches requests to the appropriate subsys
 import time
 import json
 import os
-from fyodoros.kernel.filesystem import FileSystem
+from fyodoros.kernel import rootfs
 from fyodoros.kernel.users import UserManager
 from fyodoros.kernel.network import NetworkManager
 from fyodoros.kernel.cloud.docker_interface import DockerInterface
@@ -23,7 +23,6 @@ class SyscallHandler:
     Handles system calls from processes.
 
     Attributes:
-        fs (FileSystem): The filesystem instance.
         scheduler (Scheduler): The process scheduler.
         user_manager (UserManager): User management system.
         network_manager (NetworkManager): Network management system.
@@ -39,7 +38,6 @@ class SyscallHandler:
             user_manager (UserManager, optional): User manager instance.
             network_manager (NetworkManager, optional): Network manager instance.
         """
-        self.fs = FileSystem()
         self.scheduler = scheduler
         self.user_manager = user_manager or UserManager()
         self.network_manager = network_manager or NetworkManager(self.user_manager)
@@ -141,20 +139,6 @@ class SyscallHandler:
             return ["root", "admin"]
         return self.user_manager.get_roles(uid)
 
-    # Filesystem Helpers
-    def _resolve_sandbox_path(self, path):
-        """
-        Check if path targets the sandbox.
-        Returns (is_sandbox, real_path)
-        """
-        if self.sandbox:
-            # AgentSandbox._resolve returns absolute paths rooted at sandbox.root_path
-            # We check if the incoming path starts with that root.
-            root = self.sandbox.root_path
-            if path.startswith(root):
-                return True, path
-        return False, path
-
     # Filesystem
     def sys_ls(self, path="/"):
         """
@@ -166,30 +150,20 @@ class SyscallHandler:
         Returns:
             list[str]: List of filenames.
         """
-        # Check Sandbox First
-        is_sb, real_path = self._resolve_sandbox_path(path)
-        if is_sb and os.path.exists(real_path):
-            if os.path.isdir(real_path):
+        try:
+            real_path = rootfs.resolve(path)
+            if not real_path.exists():
+                raise FileNotFoundError(f"Path not found: {path}")
+
+            if real_path.is_dir():
                 return os.listdir(real_path)
             else:
-                return [os.path.basename(real_path)]
-
-        # Fallback to In-Memory
-        uid = self._get_current_uid()
-        groups = self._get_current_groups()
-
-        try:
-            # Optimization: Try to list directory directly to avoid double path resolution.
-            # FileSystem.list_dir resolves the path once.
-            return self.fs.list_dir(path, uid, groups)
-        except ValueError:
-            # FileSystem.list_dir raises ValueError if the resolved node is not a DirectoryNode.
-            # This means the path exists but is a file.
-            # We return the filename, preserving original behavior (no explicit read perm check on file for ls).
-            return [os.path.basename(path)]
-        except KeyError:
-            # FileSystem._resolve raises KeyError if the path does not exist.
-            raise FileNotFoundError(f"Path not found: {path}")
+                return [real_path.name]
+        except Exception as e:
+            # Re-raise specific errors or map to FileNotFoundError
+            if isinstance(e, FileNotFoundError):
+                raise e
+            raise FileNotFoundError(f"Path not found or error accessing: {path} ({e})")
 
     def sys_read(self, path):
         """
@@ -201,14 +175,9 @@ class SyscallHandler:
         Returns:
             str: File content.
         """
-        is_sb, real_path = self._resolve_sandbox_path(path)
-        if is_sb and os.path.exists(real_path) and os.path.isfile(real_path):
-            with open(real_path, "r") as f:
-                return f.read()
-
-        uid = self._get_current_uid()
-        groups = self._get_current_groups()
-        return self.fs.read_file(path, uid, groups)
+        real_path = rootfs.resolve(path)
+        with open(real_path, "r") as f:
+            return f.read()
 
     def sys_write(self, path, data):
         """
@@ -221,22 +190,14 @@ class SyscallHandler:
         Returns:
             bool: True.
         """
-        is_sb, real_path = self._resolve_sandbox_path(path)
-        if is_sb:
-            # Check parent existence for sandbox
-            parent = os.path.dirname(real_path)
-            if not os.path.exists(parent):
-                os.makedirs(parent)
-            with open(real_path, "w") as f:
-                f.write(data)
-            self.sys_log(f"[fs-sandbox] write {path}")
-            return True
+        real_path = rootfs.resolve(path)
+        # Ensure parent exists
+        real_path.parent.mkdir(parents=True, exist_ok=True)
 
-        uid = self._get_current_uid()
-        groups = self._get_current_groups()
-        # Explicitly passing groups to match FileSystem API and Test Expectations
-        self.fs.write_file(path, data, uid, groups)
-        self.sys_log(f"[fs] write {path} by {uid}")
+        with open(real_path, "w") as f:
+            f.write(data)
+
+        self.sys_log(f"[fs] write {path} by {self._get_current_uid()}")
         return True
 
     def sys_append(self, path, text):
@@ -250,18 +211,12 @@ class SyscallHandler:
         Returns:
             bool: True.
         """
-        is_sb, real_path = self._resolve_sandbox_path(path)
-        if is_sb:
-            parent = os.path.dirname(real_path)
-            if not os.path.exists(parent):
-                os.makedirs(parent)
-            with open(real_path, "a") as f:
-                f.write(text + "\n")
-            return True
+        real_path = rootfs.resolve(path)
+        # Ensure parent exists
+        real_path.parent.mkdir(parents=True, exist_ok=True)
 
-        uid = self._get_current_uid()
-        groups = self._get_current_groups()
-        self.fs.append_file(path, text, uid, groups)
+        with open(real_path, "a") as f:
+            f.write(text + "\n")
         return True
 
     def sys_delete(self, path):
@@ -274,28 +229,15 @@ class SyscallHandler:
         Returns:
             bool: True if successful, False otherwise.
         """
-        is_sb, real_path = self._resolve_sandbox_path(path)
-        if is_sb:
-            try:
-                if os.path.isdir(real_path):
-                    os.rmdir(real_path)  # Only empty
-                else:
-                    os.remove(real_path)
-                self.sys_log(f"[fs-sandbox] delete {path}")
-                return True
-            except Exception:
-                return False
-
-        uid = self._get_current_uid()
-        groups = self._get_current_groups()
         try:
-            self.fs.delete_file(path, uid, groups)
-            self.sys_log(f"[fs] delete {path} by {uid}")
+            real_path = rootfs.resolve(path)
+            if real_path.is_dir():
+                os.rmdir(real_path)  # Only empty
+            else:
+                os.remove(real_path)
+            self.sys_log(f"[fs] delete {path} by {self._get_current_uid()}")
             return True
-        except Exception as e:
-            # We swallow exception here but maybe we should log it?
-            # Or better, return failure.
-            # The original code swallowed it.
+        except Exception:
             return False
 
     def sys_kill(self, pid, sig="SIGTERM"):
@@ -516,7 +458,9 @@ class SyscallHandler:
                 "error": "Permission Denied: manage_docker required",
             }
         try:
-            return self.docker_interface.build_image(path, tag, dockerfile)
+            # Docker build needs a real host path, resolve it!
+            real_path = rootfs.resolve(path)
+            return self.docker_interface.build_image(str(real_path), tag, dockerfile)
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -773,7 +717,7 @@ class SyscallHandler:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         line = f"{timestamp} {msg}"
         try:
-            self.fs.append_file("/var/log/journal/kernel.log", line, "root")
+            self.sys_append("/var/logs/kernel.log", line)
         except:
             pass  # Boot time issues
         return True
