@@ -4,6 +4,8 @@ FyodorOS CLI Entry Point.
 """
 
 import sys
+import os
+import subprocess
 import shutil
 import argparse
 from pathlib import Path
@@ -82,6 +84,7 @@ def serve(args):
     Start the FyodorOS API Server.
     """
     print(f"Starting FyodorOS Server on port {args.port}...")
+    print(f"PORT: {args.port}")
     try:
         import uvicorn
         # We run the app defined in fyodoros.server.main
@@ -112,6 +115,61 @@ def agent(args):
         print(f"Agent execution failed: {e}")
         sys.exit(1)
 
+def check_frozen_status():
+    """Returns True if the application is frozen (compiled), False otherwise."""
+    return getattr(sys, 'frozen', False)
+
+def check_rootfs_write():
+    """Tries to write a temp file to ~/.fyodor/tmp. Returns True if successful."""
+    try:
+        test_path = Path.home() / ".fyodor" / "tmp" / "test_write"
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        test_path.write_text("ok")
+        content = test_path.read_text()
+        success = (content == "ok")
+        test_path.unlink(missing_ok=True)
+        return success
+    except Exception:
+        return False
+
+def check_nasm():
+    """Runs nasm -v. Returns True if successful."""
+    try:
+        subprocess.run(["nasm", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+def doctor(args):
+    """
+    Self-diagnosis tool to check system health and environment.
+    """
+    print("Running FyodorOS Doctor...\n")
+
+    # 1. Execution Mode
+    is_frozen = check_frozen_status()
+    mode = "Frozen Binary" if is_frozen else "Python Script"
+    print(f"[Mode]      {mode}")
+
+    # 2. RootFS Access
+    if check_rootfs_write():
+        print("[RootFS]    Write/Read OK")
+    else:
+        print("[RootFS]    Read mismatch or Failed")
+
+    # 3. NASM Runtime
+    if check_nasm():
+        print("[NASM]      Assembly Engine Available")
+    else:
+        print("[NASM]      Warning: Assembly Engine Disabled (nasm not found)")
+
+    # 4. Sidecar Handshake
+    sidecar_port = os.environ.get("FYODOR_SIDECAR_PORT")
+    if sidecar_port:
+        print(f"[Sidecar]   FYODOR_SIDECAR_PORT detected: {sidecar_port}")
+    else:
+        print("[Sidecar]   No Tauri environment detected (Standalone)")
+
 def main():
     """Main entry point for the CLI script."""
     parser = argparse.ArgumentParser(description="FyodorOS Command Line Interface")
@@ -134,6 +192,10 @@ def main():
     parser_agent = subparsers.add_parser("agent", help="Run the AI Agent")
     parser_agent.add_argument("prompt", help="The task for the agent")
     parser_agent.set_defaults(func=agent)
+
+    # doctor
+    parser_doctor = subparsers.add_parser("doctor", help="Run self-diagnosis")
+    parser_doctor.set_defaults(func=doctor)
 
     args = parser.parse_args()
 
