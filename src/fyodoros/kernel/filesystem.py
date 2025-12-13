@@ -20,7 +20,7 @@ class Permissions:
         group_mode (str): Group permission mode.
         world_mode (str): World permission mode.
     """
-    def __init__(self, owner="root", mode="rw", group="root", group_mode="r", world_mode="r"):
+    def __init__(self, owner="root", mode="rw", group="root", group_mode="", world_mode=""):
         """
         Initialize Permissions.
 
@@ -28,8 +28,8 @@ class Permissions:
             owner (str, optional): The owner's username. Defaults to "root".
             mode (str, optional): Owner permission string. Defaults to "rw".
             group (str, optional): The owner's group. Defaults to "root".
-            group_mode (str, optional): Group permission string. Defaults to "r".
-            world_mode (str, optional): World permission string. Defaults to "r".
+            group_mode (str, optional): Group permission string. Defaults to "".
+            world_mode (str, optional): World permission string. Defaults to "".
         """
         self.owner = owner
         self.group = group
@@ -47,7 +47,7 @@ class FileNode:
         data (str): The content of the file.
         permissions (Permissions): Access permissions.
     """
-    def __init__(self, name, data="", owner="root", mode="rw", group="root", group_mode="r", world_mode="r"):
+    def __init__(self, name, data="", owner="root", mode="rw", group="root", group_mode="", world_mode=""):
         """
         Initialize a FileNode.
 
@@ -57,8 +57,8 @@ class FileNode:
             owner (str, optional): Owner username. Defaults to "root".
             mode (str, optional): Owner permission mode. Defaults to "rw".
             group (str, optional): Group name. Defaults to "root".
-            group_mode (str, optional): Group permission mode. Defaults to "r".
-            world_mode (str, optional): World permission mode. Defaults to "r".
+            group_mode (str, optional): Group permission mode. Defaults to "".
+            world_mode (str, optional): World permission mode. Defaults to "".
         """
         self.name = name
         self.data = data
@@ -77,7 +77,7 @@ class DirectoryNode:
         children (dict): A dictionary mapping names to child nodes (Files or Directories).
         permissions (Permissions): Access permissions.
     """
-    def __init__(self, name, owner="root", mode="rw", group="root", group_mode="r", world_mode="r"):
+    def __init__(self, name, owner="root", mode="rw", group="root", group_mode="", world_mode=""):
         """
         Initialize a DirectoryNode.
 
@@ -86,8 +86,8 @@ class DirectoryNode:
             owner (str, optional): Owner username. Defaults to "root".
             mode (str, optional): Owner permission mode. Defaults to "rw".
             group (str, optional): Group name. Defaults to "root".
-            group_mode (str, optional): Group permission mode. Defaults to "r".
-            world_mode (str, optional): World permission mode. Defaults to "r".
+            group_mode (str, optional): Group permission mode. Defaults to "".
+            world_mode (str, optional): World permission mode. Defaults to "".
         """
         self.name = name
         self.children = {}
@@ -359,6 +359,38 @@ class FileSystem:
              del parent.children[name]
         else:
             raise PermissionError(f"Permission denied: {path}")
+
+    def chmod(self, path, mode=None, group_mode=None, world_mode=None, uid="root", groups=None):
+        """
+        Change permissions of a file or directory.
+        Only owner or root can change permissions.
+
+        Args:
+            path (str): The path to modify.
+            mode (str, optional): The new owner mode (e.g. 'rw').
+            group_mode (str, optional): The new group mode.
+            world_mode (str, optional): The new world mode.
+            uid (str): The requesting user ID.
+            groups (list[str], optional): The user's groups (unused for check, only owner/root).
+
+        Raises:
+            FileNotFoundError: If path not found.
+            PermissionError: If user is not owner/root.
+        """
+        try:
+            node = self._resolve(path)
+        except KeyError:
+            raise FileNotFoundError(f"Path not found: {path}")
+
+        if uid != "root" and node.permissions.owner != uid:
+            raise PermissionError(f"Permission denied: Only owner or root can change permissions for {path}")
+
+        if mode is not None:
+            node.permissions.mode = mode
+        if group_mode is not None:
+            node.permissions.group_mode = group_mode
+        if world_mode is not None:
+            node.permissions.world_mode = world_mode
 
     # ===== Helpers =====
     def _resolve(self, path):
