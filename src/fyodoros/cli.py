@@ -115,6 +115,31 @@ def agent(args):
         print(f"Agent execution failed: {e}")
         sys.exit(1)
 
+def check_frozen_status():
+    """Returns True if the application is frozen (compiled), False otherwise."""
+    return getattr(sys, 'frozen', False)
+
+def check_rootfs_write():
+    """Tries to write a temp file to ~/.fyodor/tmp. Returns True if successful."""
+    try:
+        test_path = Path.home() / ".fyodor" / "tmp" / "test_write"
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        test_path.write_text("ok")
+        content = test_path.read_text()
+        success = (content == "ok")
+        test_path.unlink(missing_ok=True)
+        return success
+    except Exception:
+        return False
+
+def check_nasm():
+    """Runs nasm -v. Returns True if successful."""
+    try:
+        subprocess.run(["nasm", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
 def doctor(args):
     """
     Self-diagnosis tool to check system health and environment.
@@ -122,30 +147,20 @@ def doctor(args):
     print("Running FyodorOS Doctor...\n")
 
     # 1. Execution Mode
-    is_frozen = getattr(sys, 'frozen', False)
+    is_frozen = check_frozen_status()
     mode = "Frozen Binary" if is_frozen else "Python Script"
     print(f"[Mode]      {mode}")
 
     # 2. RootFS Access
-    try:
-        test_path = Path.home() / ".fyodor" / "tmp" / "test_write"
-        test_path.parent.mkdir(parents=True, exist_ok=True)
-        test_path.write_text("ok")
-        content = test_path.read_text()
-        if content == "ok":
-            print("[RootFS]    Write/Read OK")
-        else:
-            print("[RootFS]    Read mismatch")
-        # Cleanup
-        test_path.unlink(missing_ok=True)
-    except Exception as e:
-        print(f"[RootFS]    Failed: {e}")
+    if check_rootfs_write():
+        print("[RootFS]    Write/Read OK")
+    else:
+        print("[RootFS]    Read mismatch or Failed")
 
     # 3. NASM Runtime
-    try:
-        subprocess.run(["nasm", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if check_nasm():
         print("[NASM]      Assembly Engine Available")
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    else:
         print("[NASM]      Warning: Assembly Engine Disabled (nasm not found)")
 
     # 4. Sidecar Handshake
