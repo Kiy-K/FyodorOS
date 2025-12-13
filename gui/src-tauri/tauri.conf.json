@@ -20,14 +20,17 @@
         "sidecar": true,
         "scope": [
           {
-            "name": "python3",
-            "cmd": "python3",
-            "args": ["-m", "fyodoros", "serve"]
+            "name": "fyodor-kernel",
+            "sidecar": true,
+            "args": ["serve", "--port", "0"]
           }
         ]
       }
     },
     "bundle": {
+      "externalBin": [
+        "bin/fyodor-kernel"
+      ],
       "active": true,
       "targets": "all",
       "identifier": "com.fyodoros.gui",
