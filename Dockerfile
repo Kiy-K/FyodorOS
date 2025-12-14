@@ -6,7 +6,6 @@ FROM python:3.10-slim AS builder
 # 'patchelf' is required by Nuitka for standalone linux builds
 RUN apt-get update && apt-get install -y \
     build-essential \
-    ccache \
     patchelf \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,6 +24,10 @@ RUN python setup_extensions.py build_ext --inplace
 
 # Step B: Build the kernel (Nuitka)
 # This outputs to /app/gui/src-tauri/bin/fyodor-kernel
+# Force Nuitka into CI-friendly mode
+ENV NUITKA_PROGRESS_BAR=0
+ENV NUITKA_QUIET=0
+ENV NUITKA_JOBS=2
 RUN python scripts/build_kernel.py
 
 # Stage 2: Runtime
