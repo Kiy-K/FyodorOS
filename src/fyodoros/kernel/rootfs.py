@@ -69,12 +69,12 @@ def resolve(virtual_path: str) -> Path:
     root_abs = get_resolved_root()
 
     # Security Check: Ensure containment
-    try:
-        # commonpath raises ValueError if paths are on different drives
-        # It ensures strict prefix checking
-        if os.path.commonpath([root_abs, target_path]) != str(root_abs):
-            raise SecurityError(f"Path traversal detected: {virtual_path} -> {target_path}")
-    except ValueError:
-        raise SecurityError(f"Path traversal detected (drive mismatch): {virtual_path}")
+    # Optimization: Use string prefix check instead of os.path.commonpath for performance.
+    # commonpath is O(N) where N is number of path components, and involves string parsing.
+    # startswith is O(L) where L is string length, which is much faster.
+    root_str = str(root_abs)
+    target_str = str(target_path)
+    if not (target_str == root_str or target_str.startswith(os.path.join(root_str, ""))):
+        raise SecurityError(f"Path traversal detected: {virtual_path} -> {target_path}")
 
     return target_path
