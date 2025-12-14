@@ -41,6 +41,9 @@ RUN mkdir -p /home/fyodor/.fyodor && \
 # Copy the compiled binary
 COPY --from=builder --chown=fyodor:fyodor /app/src-tauri/bin/fyodor-kernel /app/fyodor-kernel
 
+# Restore the 'gui/' prefix to match the Nuitka logs
+COPY --from=builder --chown=fyodor:fyodor /app/gui/src-tauri/bin/fyodor-kernel /app/fyodor-kernel
+
 # Switch to non-root user
 USER fyodor
 
