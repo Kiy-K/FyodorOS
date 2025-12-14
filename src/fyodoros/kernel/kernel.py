@@ -15,6 +15,7 @@ from .network import NetworkManager, NetworkGuard
 from .sandbox import AgentSandbox
 from fyodoros.servicemanager.servicemanager import ServiceManager
 from fyodoros.kernel.plugin_loader import PluginLoader
+from fyodoros.kernel.senses.listener import BackgroundListener
 
 
 class Kernel:
@@ -33,6 +34,7 @@ class Kernel:
         sandbox (AgentSandbox): Sandboxed environment for agents.
         service_manager (ServiceManager): Process and service supervisor.
         plugin_loader (PluginLoader): Plugin management system.
+        listener (BackgroundListener): Global hotkey listener.
         shell: The shell instance (optional).
     """
     def __init__(
@@ -87,6 +89,9 @@ class Kernel:
         self.plugin_loader = PluginLoader(self)
         self.plugin_loader.load_active_plugins()
 
+        # Background Listener (Senses)
+        self.listener = BackgroundListener(self.sys, self.io)
+
         # Shell (initialized later)
         self.shell = None
 
@@ -97,6 +102,9 @@ class Kernel:
         Initializes the Shell (if not already present), registers plugin commands, and begins execution.
         Note: This method is blocking.
         """
+        # Start the background listener
+        self.listener.start()
+
         from fyodoros.shell.shell import Shell
 
         if self.shell:
@@ -108,7 +116,10 @@ class Kernel:
 
         # Note: This start implementation is blocking and basic, mainly for testing.
         # The robust implementation is in __main__.py
-        shell.run()
+        try:
+            shell.run()
+        finally:
+            self.shutdown()
 
     def shutdown(self):
         """
@@ -142,5 +153,9 @@ class Kernel:
         # 5. Disable Network Guard (Release patches)
         if self.network_guard:
             self.network_guard.disable()
+
+        # 6. Stop Listener
+        if self.listener:
+            self.listener.stop()
 
         self.io.write("[Kernel] Shutdown complete.\n")
