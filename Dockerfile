@@ -16,11 +16,13 @@ WORKDIR /app
 # Copy the entire repository
 COPY . .
 
-# Install dependencies from pyproject.toml (including nuitka, ordered-set)
-# This ensures the environment matches the project definition
-RUN pip install .
+# Install dependencies from requirements.txt
+RUN pip install -r requirements.txt
 
-# Build the kernel
+# Step A: Compile C++ Extensions
+RUN python setup_extensions.py build_ext --inplace
+
+# Step B: Build the kernel (Nuitka)
 # The script outputs to gui/src-tauri/bin/fyodor-kernel
 RUN python scripts/build_kernel.py
 
