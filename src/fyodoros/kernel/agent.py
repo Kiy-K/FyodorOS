@@ -234,6 +234,7 @@ AVAILABLE ACTIONS:
 - sys_k8s_scale(name, replicas, namespace="default")
 - sys_k8s_delete(name, namespace="default")
 - sys_k8s_logs(pod_name, namespace="default")
+- launch_app(app_name) <-- Launch a host application by name (e.g., 'Launch Chrome').
 - done()  <-- Call this when the task is complete.
 
 Do not interact with system files (/kernel, /bin, /etc).
