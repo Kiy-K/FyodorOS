@@ -1,29 +1,31 @@
 # Changelog
 
-## [0.8.0] - 2025-12-13 "The Ironclad Update"
-### Architecture (Major Breaking Change)
-- Migrated from pure Python library to **Tauri + Nuitka** Hybrid Application.
-- Introduced **Sidecar Protocol**: Kernel runs as a compiled headless process controlled by React Frontend.
-- Implemented **Shadcn/UI** for a professional "IDE-like" interface.
-
-### Added
-- `fyodor doctor`: Self-diagnosis tool for frozen binaries.
-- `rootfs`: Strict virtualization of the file system (`~/.fyodor/`).
-- **CI/CD**: GitHub Actions for automated cross-platform compilation.
+## [0.7.0] - 2025-12-14
+### System Internals
+- **Persistent Memory System**: Integrated `ChromaDB` to provide long-term semantic memory for Agents.
+    - **Backing Store**: Memories persist in `~/.fyodor/memory/` across reboots.
+    - **Vector Search**: Utilizes embedding-based retrieval to recall relevant context for tasks.
+- **Service Manager Optimization**: Refined the DAG-based dependency resolution with `TopologicalSorter` for guaranteed correct startup/shutdown order.
+- **Boot Sequence**: Improved deterministic boot order with explicit resource cleanup on failure.
 
 ### Security
-- **Frozen Code**: Kernel source is no longer exposed in plain text.
+- **Dual-Layer Path Resolution**:
+    - **C++ Sandbox Core**: `resolve_path` now uses `std::filesystem::lexically_normal` and strict prefix checking to prevent traversal attacks at the native level.
+    - **Python Kernel**: `rootfs.resolve` implements a secondary check using `os.path.commonpath` for "secure Python fallback".
+- **Sandbox Isolation**: The C++ core (`sandbox.cpp`) now enforces strict I/O pipe management with `poll()` to prevent deadlocks during high-volume process output.
 
-## [0.7.0] - 2025-12-12
-### Added
-- **Persistent Memory System**: Integrated `ChromaDB` to provide semantic memory capabilities.
-    - **Syscalls**: `sys_memory_store`, `sys_memory_search`, `sys_memory_recall`, `sys_memory_delete`.
-    - **Agent Integration**: `ReActAgent` now auto-recalls relevant memories at the start of a task.
-    - **Persistence**: Memories are stored in `~/.fyodor/memory` and persist across reboots.
-- **Dependencies**: Added `chromadb` to `pyproject.toml` and `environment.yml`.
+### API/Syscalls
+- **New Syscalls**:
+    - `sys_memory_store(content, metadata)`: Store a text memory with optional metadata.
+    - `sys_memory_search(query, limit)`: Semantic search over stored memories.
+    - `sys_memory_recall(query)`: Alias for search.
+    - `sys_memory_delete(key_id_or_query)`: Remove specific memories.
+- **Agent Integration**: `ReActAgent` loop now automatically invokes `sys_memory_search` at the start of a task to retrieve historical context.
 
-### Performance
-- **Filesystem**: Optimized `sys_ls` to improve path resolution speed and error handling.
+### Fixed
+- **Boot**: Fixed a race condition where `NetworkGuard` could leave sockets patched on a failed boot.
+- **Filesystem**: Fixed `sys_ls` path resolution to correctly handle trailing slashes and virtual root mappings.
+- **Dependencies**: Added `chromadb` for vector storage and updated `playwright` for browser automation.
 
 ## [0.6.0] - 2025-12-09
 ### Verified
@@ -64,64 +66,12 @@
 - **Cloud Interface**: `DockerInterface` and `KubernetesInterface` in `kernel.cloud`.
 
 ## [0.4.0] - 2025-12-07
-
 ### Added
-
-#### Kernel Networking Layer
-- **Global On/Off Switch**: Network functionality can now be controlled via `fyodor network` command
-- **Strict Socket Enforcement**: Monkeypatching implementation ensures all socket operations go through the kernel layer
-- **RBAC Integration**: Network access control through `manage_network` and `use_network` permissions
-
-#### NASM Runtime
-- **C++ FFI Sandbox Extension**: Native assembly execution in sandboxed environment
-- **`sys_exec_nasm` Syscall**: New system call for executing NASM code from within the kernel
-
-### Examples
-
-#### CLI Network Management
-```bash
-# Enable/disable network globally
-fyodor network on
-fyodor network off
-```
-
-#### Python Agent Running NASM
-```python
-# Example of executing NASM code from Python agent
-result = sys_exec_nasm("""
-    section .text
-    global _start
-    _start:
-        ; Your NASM code here
-""")
-```
+- **Kernel Networking Layer**: Global On/Off Switch, Strict Socket Enforcement, RBAC Integration.
+- **NASM Runtime**: C++ FFI Sandbox Extension, `sys_exec_nasm` Syscall.
 
 ## [0.3.5] - 2025-12-06
 ### Added
-- **Plugin System Enhancements**:
-  - Added support for plugin configuration via `fyodor plugin settings`.
-  - Added persistent configuration storage in `~/.fyodor/plugins/config.json`.
-- **New Plugins**:
-  - `github`: Integration with GitHub for listing repos, creating issues, and viewing PRs.
-  - `slack_notifier`: Send notifications to Slack webhooks.
-  - `usage_dashboard`: Background system usage monitoring with TUI (`fyodor dashboard`).
-  - `team_collaboration`: Role-Based Access Control (RBAC) extending the user management system.
-- **User Management**:
-  - Added role support to users (admin/user).
-  - Added permission checking hooks.
-
-### Changed
-- `UserManager` now stores roles and passwords in a dictionary structure instead of just password hashes.
-- CLI updated to include `dashboard` command.
-
-### Plugin System
-- Added **C++ Registry Core** (`registry_core` extension) for high-performance plugin management.
-- Added **Plugin Manager** CLI (`fyodor plugin install/build/create`).
-- Added Multi-language Support:
-  - **Python**: Standard support.
-  - **C++**: Auto-compilation via `cmake`.
-  - **Node.js**: Auto-dependency installation via `npm`/`bun`.
-
-### Security
-- **C++ Sandbox Core**: New isolation layer enforcing virtual filesystem boundaries.
-- **Process Isolation**: Agent commands run in restricted environments with sanitized paths and environment variables.
+- **Plugin System**: Configuration storage, C++ Registry Core, Polyglot support (Python/C++/Node).
+- **New Plugins**: `github`, `slack_notifier`, `usage_dashboard`, `team_collaboration`.
+- **User Management**: Role-based access control (admin/user).
