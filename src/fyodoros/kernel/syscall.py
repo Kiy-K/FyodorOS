@@ -47,6 +47,7 @@ class SyscallHandler:
         self.k8s_interface = KubernetesInterface()
         self.memory_manager = MemoryManager()
         self.ui_driver = UIDriver()
+        self.last_ui_scan = None
         self.motor = Motor()
         self.motor.start_kill_switch()
         self.sandbox = None
@@ -774,8 +775,11 @@ class SyscallHandler:
     def sys_ui_scan(self):
         """
         Scan the active window and return a DOM tree.
+        Stores the result in self.last_ui_scan.
         """
-        return self.ui_driver.scan_active_window()
+        result = self.ui_driver.scan_active_window()
+        self.last_ui_scan = result
+        return result
 
     def sys_ui_act(self, uid, action, payload=None):
         """
