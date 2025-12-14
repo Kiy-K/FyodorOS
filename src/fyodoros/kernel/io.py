@@ -22,6 +22,14 @@ class IOAdapter(ABC):
         """Flush the output stream."""
         pass
 
+    def signal(self, name: str):
+        """Send a control signal to the frontend (e.g. WAKE)."""
+        pass
+
+    def get_signal(self):
+        """Retrieve a pending signal (non-blocking)."""
+        return None
+
 
 class CLIAdapter(IOAdapter):
     """
@@ -41,16 +49,22 @@ class CLIAdapter(IOAdapter):
         import sys
         sys.stdout.flush()
 
+    def signal(self, name: str):
+        # CLI doesn't support wake signals in the same way, but we can log it for debug
+        pass
+
 
 class APIAdapter(IOAdapter):
     """
     Adapter for API/Web usage.
     Captures output into a queue for consumption by WebSocket/Response.
     Input is handled via an input queue (populated by API calls).
+    Supports a separate signal channel for control events.
     """
     def __init__(self):
         self.output_queue = queue.Queue()
         self.input_queue = queue.Queue()
+        self.signal_queue = queue.Queue()
         self._buffer = []
 
     def write(self, text: str):
@@ -71,6 +85,10 @@ class APIAdapter(IOAdapter):
     def flush(self):
         pass
 
+    def signal(self, name: str):
+        """External method to send a signal to the API/Frontend."""
+        self.signal_queue.put(name)
+
     def input(self, text: str):
         """External method to inject input from the API."""
         self.input_queue.put(text)
@@ -79,5 +97,12 @@ class APIAdapter(IOAdapter):
         """External method to retrieve output."""
         try:
             return self.output_queue.get(block=block, timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def get_signal(self, block=False, timeout=None):
+        """External method to retrieve signals."""
+        try:
+            return self.signal_queue.get(block=block, timeout=timeout)
         except queue.Empty:
             return None

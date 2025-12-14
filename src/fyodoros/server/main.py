@@ -4,8 +4,10 @@ from pydantic import BaseModel
 import threading
 import time
 import asyncio
+import json
 from fyodoros.kernel.kernel import Kernel
 from fyodoros.kernel.io import APIAdapter
+from fyodoros.kernel.agent import ReActAgent
 
 app = FastAPI()
 
@@ -38,7 +40,15 @@ def startup_event():
     print("[Server] Booting Kernel...")
     kernel = Kernel(io_adapter=io_adapter)
 
-    # 3. Start Kernel in background thread
+    # 3. Initialize Persistent Agent
+    # We attach an agent to the kernel so we can inject context.
+    # The Shell/CLI might use its own agent instance, but for the "Desktop" experience
+    # we want a shared or persistent agent state that the GUI interacts with.
+    # Note: If the shell starts a new agent for every 'agent' command, it won't see this context.
+    # Ideally, the Shell should use kernel.agent if available.
+    kernel.agent = ReActAgent(kernel.sys)
+
+    # 4. Start Kernel in background thread
     kernel_thread = threading.Thread(target=run_kernel_loop, args=(kernel,), daemon=True)
     kernel_thread.start()
 
@@ -66,16 +76,36 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            # Poll for output from the kernel
-            # We use a non-blocking get inside a loop with sleep to yield to asyncio
-            # Ideally we'd use an async queue or callback, but bridging sync kernel to async fastapi
-            # is easiest this way for now.
+            # Poll for output and signals from the kernel
             if io_adapter:
+                # 1. Check Output (Text)
                 output = io_adapter.get_output()
                 if output:
-                    await websocket.send_text(output)
-                else:
-                    await asyncio.sleep(0.1)
+                    # Backward compatibility: Send plain text if it's text
+                    # Or structured JSON? For now, we assume frontend expects text.
+                    # But if we want structured...
+                    # The instruction says: 'Send {"type": "text", "content": ...}'
+                    await websocket.send_json({"type": "text", "content": output})
+
+                # 2. Check Signals (Control)
+                signal = io_adapter.get_signal()
+                if signal:
+                     # Handle WAKE signal
+                     if signal == "WAKE":
+                         print("[Server] Processing WAKE signal...")
+                         # 1. Trigger fresh scan
+                         scan_result = kernel.sys.sys_ui_scan()
+
+                         # 2. Inject context into Agent
+                         if kernel.agent:
+                             context_msg = f"User just woke you up via Hotkey. Context: {json.dumps(scan_result)}"
+                             kernel.agent.inject_context(context_msg)
+
+                     # 3. Notify Client
+                     await websocket.send_json({"type": "signal", "content": signal})
+
+                if not output and not signal:
+                    await asyncio.sleep(0.05)
             else:
                 await asyncio.sleep(1)
     except WebSocketDisconnect:

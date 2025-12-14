@@ -13,18 +13,18 @@
           The Experimental AI Microkernel
 ```
 
-**FyodorOS** is a local-first AI Operating System that runs on your metal. Unlike traditional OSs designed for humans (GUI/CLI) or servers (API), FyodorOS exposes the entire system state as a **Document Object Model (DOM)**, allowing Agents to "perceive" and interact with the kernel natively.
+The Operating System for Autonomous AI Agents.
 
 ## 🚀 Vision
 
 We believe that for AI Agents to be truly useful and safe, they need an environment built for them. FyodorOS provides:
-*   **Structured Observation**: The OS state (Filesystem, Processes, Users) is a queryable DOM tree.
-*   **Cognitive Loop**: Built-in ReAct (Reasoning + Acting) loop at the kernel level.
-*   **Safety Sandbox**: A strict, rule-based verification layer that constraints Agent actions before execution.
-*   **Agent-Native Apps**: Standard tools (`browser`, `explorer`, `calc`) that return structured JSON/DOM instead of plain text, minimizing token usage and parsing errors.
-*   **Cloud Integration (v0.5.0)**: Native Docker and Kubernetes support.
-*   **Long-Term Memory (v0.7.0)**: Persistent semantic storage allowing agents to learn and recall information.
-*   **Desktop Interface (v0.8.0)**: A native desktop application bridging the Python kernel with a modern React UI.
+*   **Structured Observation:** The OS state (Filesystem, Processes, Users) is a queryable DOM tree.
+*   **Cognitive Loop:** Built-in ReAct (Reasoning + Acting) loop at the kernel level.
+*   **Safety Sandbox:** A strict, rule-based verification layer that constraints Agent actions before execution.
+*   **Agent-Native Apps:** Standard tools (browser, explorer, calc) that return structured JSON/DOM instead of plain text.
+*   **Cloud Integration (v0.5.0):** Native Docker and Kubernetes support.
+*   **Long-Term Memory (v0.7.0):** Persistent semantic storage allowing agents to learn and recall information.
+*   **Desktop Interface (v0.8.0)** 🚀 [NEW]: A native desktop application bridging the Python kernel with a modern React UI.
 
 ## 📦 Installation
 
@@ -59,6 +59,10 @@ To build the full Desktop experience from source, you need Node.js, Rust, and Py
     ```bash
     npm run tauri dev
     ```
+
+## 🗺️ Roadmap
+
+See our detailed trajectory in [ROADMAP.md](./ROADMAP.md).
 
 ## 🏗️ Architecture
 
