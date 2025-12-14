@@ -16,6 +16,8 @@ from fyodoros.kernel.network import NetworkManager
 from fyodoros.kernel.cloud.docker_interface import DockerInterface
 from fyodoros.kernel.cloud.k8s_interface import KubernetesInterface
 from fyodoros.kernel.memory import MemoryManager
+from fyodoros.kernel.senses.ui_driver import UIDriver
+from fyodoros.kernel.senses.motor import Motor, StaleElementException
 
 
 class SyscallHandler:
@@ -44,6 +46,9 @@ class SyscallHandler:
         self.docker_interface = DockerInterface()
         self.k8s_interface = KubernetesInterface()
         self.memory_manager = MemoryManager()
+        self.ui_driver = UIDriver()
+        self.motor = Motor()
+        self.motor.start_kill_switch()
         self.sandbox = None
 
     def set_scheduler(self, scheduler):
@@ -760,3 +765,34 @@ class SyscallHandler:
         Delete a memory by ID or query.
         """
         return self.memory_manager.delete(key_id, query)
+
+    # Deprecated Mouse/Screen calls
+    # sys_mouse_move and sys_capture_screen have been removed in v0.8.0
+    # in favor of sys_ui_scan and sys_ui_act.
+
+    # UI / Motor Control
+    def sys_ui_scan(self):
+        """
+        Scan the active window and return a DOM tree.
+        """
+        return self.ui_driver.scan_active_window()
+
+    def sys_ui_act(self, uid, action, payload=None):
+        """
+        Perform an action on a UI element.
+
+        Args:
+            uid (int): The Element UID.
+            action (str): 'click', 'type', 'scroll'.
+            payload (str): Optional data.
+
+        Returns:
+            dict: Success or error.
+        """
+        try:
+            self.motor.execute_action(uid, action, payload)
+            return {"success": True}
+        except StaleElementException:
+            return {"success": False, "error": "Stale Element. Re-scan required."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
