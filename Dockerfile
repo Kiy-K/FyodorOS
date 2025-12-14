@@ -2,7 +2,8 @@
 FROM python:3.10-slim AS builder
 
 # Install system dependencies for Nuitka compilation
-# CRITICAL FIX: Changed 'gcc' to 'build-essential' to include g++ for C++ files
+# CRITICAL: 'build-essential' provides g++ (needed for your C++ extensions)
+# 'patchelf' is required by Nuitka for standalone linux builds
 RUN apt-get update && apt-get install -y \
     build-essential \
     ccache \
@@ -14,40 +15,37 @@ WORKDIR /app
 # Copy the entire repository
 COPY . .
 
-# Install dependencies AND build tools explicitely
-# We chain commands to ensure pybind11 exists before the next step runs
+# Install dependencies AND build tools (pybind11 + Nuitka) in one go
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir pybind11 nuitka
 
 # Step A: Compile C++ Extensions
-# This previously failed because g++ was missing. Now it will work.
 RUN python setup_extensions.py build_ext --inplace
 
 # Step B: Build the kernel (Nuitka)
+# This outputs to /app/gui/src-tauri/bin/fyodor-kernel
 RUN python scripts/build_kernel.py
 
 # Stage 2: Runtime
 FROM python:3.10-slim AS runtime
 
-# Create a non-root user for security
+# Create a non-root user
 RUN useradd -m -s /bin/bash fyodor
 
 WORKDIR /app
 
-# Create the .fyodor config directory with correct permissions
+# Create the .fyodor directory structure with correct permissions
 RUN mkdir -p /home/fyodor/.fyodor && \
     chown -R fyodor:fyodor /home/fyodor
 
 # Copy the compiled binary
-COPY --from=builder --chown=fyodor:fyodor /app/src-tauri/bin/fyodor-kernel /app/fyodor-kernel
-
-# Restore the 'gui/' prefix to match the Nuitka logs
+# We use the 'gui/' path here because Nuitka puts it there
 COPY --from=builder --chown=fyodor:fyodor /app/gui/src-tauri/bin/fyodor-kernel /app/fyodor-kernel
 
 # Switch to non-root user
 USER fyodor
 
-# Expose port
+# Expose the default port
 EXPOSE 8000
 
 # Entrypoint configuration
