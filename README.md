@@ -10,7 +10,7 @@
     ██╔══╝    ╚██╔╝  ██║   ██║██║  ██║██║   ██║██╔══██╗
     ██║        ██║   ╚██████╔╝██████╔╝╚██████╔╝██║  ██║
     ╚═╝        ╚═╝    ╚═════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝
-    The Experimental AI Microkernel
+    A Compiled AI Microkernel with Native Desktop Interface
 
 The Operating System for Autonomous AI Agents.
 
