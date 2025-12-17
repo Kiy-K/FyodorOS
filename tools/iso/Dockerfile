@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     xorriso \
     isolinux \
     syslinux-common \
+    syslinux-utils \
     git \
     && rm -rf /var/lib/apt/lists/*
 

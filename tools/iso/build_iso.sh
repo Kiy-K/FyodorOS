@@ -25,9 +25,32 @@ echo "Configuring live-build..."
 lb config \
     --distribution bookworm \
     --architectures amd64 \
+    --linux-flavours amd64 \
     --archive-areas "main contrib non-free-firmware" \
     --bootappend-live "boot=live components quiet splash" \
-    --debian-installer live
+    --binary-images iso-hybrid \
+    --bootloader syslinux
+
+# Prepare package lists
+echo "Creating package list..."
+cat <<EOF > config/package-lists/fyodor.list.chroot
+live-boot
+live-config
+live-config-systemd
+syslinux
+isolinux
+python3-pip
+python3-full
+build-essential
+python3-dev
+git
+patchelf
+scons
+curl
+wget
+xorg
+openbox
+EOF
 
 # Prepare directory structure for chroot inclusions
 echo "Preparing chroot includes..."
@@ -52,21 +75,7 @@ echo "FyodorOS Installation Hook: Starting..."
 # 1. Update package lists
 apt-get update
 
-# 2. Install Python and build dependencies
-# We need these to compile extensions and run pip
-# We also include standard system utilities that might be useful
-apt-get install -y \
-    python3-pip \
-    python3-full \
-    build-essential \
-    python3-dev \
-    git \
-    patchelf \
-    scons \
-    curl \
-    wget
-
-# 3. Install FyodorOS
+# 2. Install FyodorOS
 echo "Installing FyodorOS package..."
 cd /opt/fyodoros
 
@@ -77,7 +86,7 @@ pip install pybind11 nuitka scons --break-system-packages
 # Install the package itself
 pip install . --break-system-packages
 
-# 4. Cleanup to reduce ISO size
+# 3. Cleanup to reduce ISO size
 apt-get clean
 
 echo "FyodorOS Installation Hook: Complete."
@@ -89,8 +98,12 @@ chmod +x "$HOOK_FILE"
 echo "Building ISO image... This may take a while."
 lb build
 
-# Verify and move the artifact
+# Post-process verification
+echo "Post-processing ISO..."
 if [ -f "live-image-amd64.hybrid.iso" ]; then
+    echo "Running isohybrid..."
+    isohybrid live-image-amd64.hybrid.iso
+
     echo "Build successful. Moving artifact to $OUTPUT_FILE..."
     # Ensure output directory exists (it should, as it's a mount)
     mkdir -p "$(dirname "$OUTPUT_FILE")"
