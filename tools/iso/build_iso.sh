@@ -51,6 +51,7 @@ curl
 wget
 xorg
 openbox
+lightdm
 EOF
 
 # Prepare directory structure for chroot inclusions
@@ -58,7 +59,6 @@ echo "Preparing chroot includes..."
 mkdir -p config/includes.chroot/opt/fyodoros
 
 # Copy source code to the build environment
-# We use -a to preserve attributes and include hidden files
 echo "Copying source code to /opt/fyodoros..."
 cp -a "$INPUT_DIR"/. config/includes.chroot/opt/fyodoros/
 
@@ -80,8 +80,7 @@ apt-get update
 echo "Installing FyodorOS package..."
 cd /opt/fyodoros
 
-# Install build dependencies manually first to ensure they are available for setup
-# Using --break-system-packages because we are in a dedicated ISO environment
+# Install build dependencies
 pip install pybind11 nuitka scons --break-system-packages
 
 # Install the package itself
@@ -122,6 +121,7 @@ lb build
 echo "Post-processing ISO..."
 if [ -f "live-image-amd64.hybrid.iso" ]; then
     echo "Running isohybrid utility..."
+    # --partok is safer for USB booting compatibility
     if command -v isohybrid >/dev/null 2>&1; then
         isohybrid --partok live-image-amd64.hybrid.iso
         echo "Hybrid MBR written successfully."
@@ -129,14 +129,12 @@ if [ -f "live-image-amd64.hybrid.iso" ]; then
         echo "ERROR: 'isohybrid' command not found! ISO will not be bootable."
         exit 1
     fi
-
+    
     echo "Build successful. Moving artifact to $OUTPUT_FILE..."
-    # Ensure output directory exists (it should, as it's a mount)
     mkdir -p "$(dirname "$OUTPUT_FILE")"
     cp live-image-amd64.hybrid.iso "$OUTPUT_FILE"
     echo "ISO created successfully at: $OUTPUT_FILE"
 
-    # Verify file existence and size
     ls -lh "$OUTPUT_FILE"
 else
     echo "Error: ISO file was not generated!"
