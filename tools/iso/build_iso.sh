@@ -44,6 +44,8 @@ python3-pip
 python3-full
 build-essential
 python3-dev
+cmake
+python3-pybind11
 git
 patchelf
 scons
@@ -89,10 +91,34 @@ cd /opt/fyodoros
 # Install build dependencies
 pip install pybind11 nuitka scons --break-system-packages
 
-# Install the package itself
+# 2a. Force C++ Compilation (Critical Fix)
+echo "Building and installing C++ extensions..."
+python3 setup_extensions.py install --break-system-packages
+
+# 2b. Install the package itself
 pip install . --break-system-packages
 
-# 3. Cleanup to reduce ISO size
+# 2c. Verify C++ Artifacts
+echo "Verifying C++ extensions..."
+python3 -c "import sandbox_core; print(f'sandbox_core found: {sandbox_core}')" || exit 1
+python3 -c "import registry_core; print(f'registry_core found: {registry_core}')" || exit 1
+
+# 3. Seed Default Configurations (Critical Fix for Live User)
+echo "Seeding default configurations..."
+# Run init to generate the config structure in a temporary location
+export HOME=/tmp/seed_home
+mkdir -p \$HOME
+/usr/local/bin/fyodor init
+
+# Move the generated .fyodor folder to /etc/skel
+# This ensures every new user (including the Live User) gets it on login
+mkdir -p /etc/skel
+cp -r /tmp/seed_home/.fyodor /etc/skel/
+
+# Cleanup
+rm -rf /tmp/seed_home
+
+# 4. Cleanup to reduce ISO size
 apt-get clean
 
 echo "FyodorOS Installation Hook: Complete."
