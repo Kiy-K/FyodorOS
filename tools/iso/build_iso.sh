@@ -92,11 +92,15 @@ cd /opt/fyodoros
 # Install build dependencies
 pip install pybind11 nuitka scons --break-system-packages
 
+# Hack: Remove EXTERNALLY-MANAGED to allow legacy setup.py install
+# Debian Bookworm prevents direct setup.py install without this or --break-system-packages (which setup.py doesn't support)
+rm -f /usr/lib/python*/EXTERNALLY-MANAGED
+
 # 2a. Force C++ Compilation (Critical Fix)
 echo "Building and installing C++ extensions..."
 # We explicitly run the extension setup script first
 if [ -f "setup_extensions.py" ]; then
-    python3 setup_extensions.py install --break-system-packages
+    python3 setup_extensions.py install
 else
     echo "WARNING: setup_extensions.py not found, skipping C++ compilation..."
 fi
