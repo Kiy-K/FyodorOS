@@ -9,6 +9,7 @@ interact with the FyodorOS kernel to perform tasks autonomously.
 import json
 import hashlib
 import time
+import inspect
 from fyodoros.kernel.dom import SystemDOM
 from fyodoros.kernel.sandbox import AgentSandbox
 from fyodoros.kernel.llm import LLMProvider
@@ -32,6 +33,7 @@ class ReActAgent:
         max_turns (int): Maximum number of reasoning turns allowed per task.
         history (list): History of interactions in the current task.
         todo_list (list): List of planned steps.
+        extra_tools (dict): Dictionary of dynamically registered tools {name: {'func': func, 'desc': desc}}.
     """
 
     def __init__(self, syscall_handler, model="gpt-3.5-turbo"):
@@ -59,6 +61,32 @@ class ReActAgent:
         self.max_turns = 10
         self.history = []
         self.todo_list = []
+        self.extra_tools = {}
+
+    def register_tool(self, func, description_override=None):
+        """
+        Registers a new tool for the agent to use.
+
+        Args:
+            func (callable): The function to register.
+            description_override (str, optional): A description of the tool.
+                                                  If None, uses the function's docstring.
+        """
+        name = func.__name__
+        # Clean up description
+        desc = description_override or func.__doc__ or "No description provided."
+        desc = desc.strip().replace("\n", " ")
+
+        # Parse arguments to generate a signature hint
+        sig = inspect.signature(func)
+        params = [str(p) for p in sig.parameters.values()]
+        signature = f"{name}({', '.join(params)})"
+
+        self.extra_tools[name] = {
+            "func": func,
+            "description": f"{signature} <-- {desc}"
+        }
+        print(f"[Agent] Registered tool: {name}")
 
     def inject_context(self, message: str):
         """
@@ -117,11 +145,7 @@ class ReActAgent:
             input_tokens = input_chars // 4
 
             # Wrap LLM call with retry logic
-            # Using ErrorRecovery utility
             try:
-                # We use a closure or partial to pass to retry logic if we had a generic retry runner,
-                # but let's use the retry_with_backoff decorator from utils
-                # Since decorators wrap functions at definition, we can use a helper method here.
                 response = self._generate_with_retry(prompt)
             except Exception as e:
                 print(f"[Agent] LLM Generation Failed: {e}")
@@ -146,6 +170,7 @@ class ReActAgent:
             # 3. Act
             if action:
                 start_act = time.time()
+                result = None
 
                 if action == "done":
                     print("[Agent] Task completed.")
@@ -153,8 +178,17 @@ class ReActAgent:
                     self.action_logger.log_action(task_id, loop_count, thought, "done", [], "Success", 0, input_tokens+output_tokens)
                     return "Task Completed"
 
-                # Execute via Sandbox
-                result = self.sandbox.execute(action, args)
+                # Check Extra Tools first
+                if action in self.extra_tools:
+                    try:
+                        func = self.extra_tools[action]["func"]
+                        result = func(*args)
+                    except Exception as e:
+                        result = f"Error executing tool {action}: {e}"
+                else:
+                    # Execute via Sandbox
+                    result = self.sandbox.execute(action, args)
+
                 duration = (time.time() - start_act) * 1000
 
                 # Log Action
@@ -184,6 +218,12 @@ class ReActAgent:
             str: The fully constructed prompt.
         """
         history_text = "\n".join(self.history[-3:]) # Keep last 3 turns
+
+        # Build registered tools list
+        extra_tools_list = ""
+        if self.extra_tools:
+            extra_tools_list = "\n- ".join([t["description"] for t in self.extra_tools.values()])
+            extra_tools_list = "- " + extra_tools_list
 
         return f"""
 You are an AI Agent inside FyodorOS.
@@ -236,6 +276,7 @@ AVAILABLE ACTIONS:
 - sys_k8s_logs(pod_name, namespace="default")
 - launch_app(app_name) <-- Launch a host application by name (e.g., 'Launch Chrome').
 - done()  <-- Call this when the task is complete.
+{extra_tools_list}
 
 Do not interact with system files (/kernel, /bin, /etc).
 """

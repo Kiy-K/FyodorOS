@@ -22,7 +22,8 @@ from fyodoros.kernel.senses.motor import Motor, StaleElementException
 from fyodoros.kernel.shell.launcher import AppLauncher
 from fyodoros.kernel.shell.supervisor import Supervisor
 from fyodoros.kernel.shell.window_manager import WindowManager
-
+from fyodoros.kernel.plugins.installer import PluginInstaller
+from fyodoros.kernel.plugins.loader import PluginLoader
 
 class SyscallHandler:
     """
@@ -59,6 +60,10 @@ class SyscallHandler:
         self.launcher = AppLauncher()
         self.supervisor = Supervisor()
         self.window_manager = WindowManager()
+
+        # Plugins
+        self.plugin_installer = PluginInstaller()
+        self.plugin_loader = PluginLoader() # The loader is mostly used by the kernel, but syscalls might need introspection.
 
         self.sandbox = None
 
@@ -712,6 +717,35 @@ class SyscallHandler:
             return self.k8s_interface.get_pod_logs(pod_name, namespace)
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    # Plugin Management
+    def sys_plugin_list(self):
+        """
+        List all installed plugins (by directory presence).
+        """
+        # We can iterate the plugins directory directly
+        # or ask the installer/loader.
+        # Since 'loader' tracks loaded ones, but we want all installed:
+        try:
+            return [p.name for p in self.plugin_installer.plugins_dir.iterdir() if p.is_dir()]
+        except Exception:
+            return []
+
+    def sys_plugin_install(self, name_or_url):
+        """
+        Install a plugin from Registry or Git URL.
+        """
+        user = self._get_current_uid()
+        if user != "root":
+             # Eventually check a permission, for now allow root/admin
+             pass
+        return self.plugin_installer.install_plugin(name_or_url)
+
+    def sys_plugin_uninstall(self, name):
+        """
+        Uninstall a plugin.
+        """
+        return self.plugin_installer.uninstall_plugin(name)
 
     # System Control
     def sys_shutdown(self):

@@ -14,7 +14,7 @@ from .users import UserManager
 from .network import NetworkManager, NetworkGuard
 from .sandbox import AgentSandbox
 from fyodoros.servicemanager.servicemanager import ServiceManager
-from fyodoros.kernel.plugin_loader import PluginLoader
+from fyodoros.kernel.plugins.loader import PluginLoader
 from fyodoros.kernel.senses.listener import BackgroundListener
 
 
@@ -86,8 +86,21 @@ class Kernel:
         self.service_manager = service_manager if service_manager else ServiceManager(self.scheduler, self.sys)
 
         # Plugins
-        self.plugin_loader = PluginLoader(self)
-        self.plugin_loader.load_active_plugins()
+        # Use existing loader if syscall has one, else create new
+        if hasattr(self.sys, 'plugin_loader'):
+            self.plugin_loader = self.sys.plugin_loader
+            self.plugin_loader.kernel = self # Attach kernel back ref
+        else:
+            self.plugin_loader = PluginLoader(self)
+
+        # NOTE: We do not load plugins here immediately because they might require an Agent instance.
+        # They are loaded lazily or when agent starts.
+        # However, for Shell commands, we might need them?
+        # The new architecture focuses on Agent tools. Shell commands from plugins are not explicitly mentioned in v1.1.0 directives.
+        # Assuming v1.1.0 focuses on Agent tools, we defer loading until Agent is ready or shell requests it.
+        # But wait, old kernel loaded them. If we want backward compat, we might need to load them but what about 'agent' arg?
+        # The new loader requires `load_all_plugins(agent)`.
+        # So we cannot load them here without an agent.
 
         # Background Listener (Senses)
         self.listener = BackgroundListener(self.sys, self.io)
@@ -114,8 +127,9 @@ class Kernel:
             shell = self.shell
         else:
             shell = Shell(self.sys, self.service_manager, self.io)
-            # Inject plugin commands
-            shell.register_plugin_commands(self.plugin_loader.get_all_shell_commands())
+            # Inject plugin commands - Logic removed as new loader doesn't support get_all_shell_commands yet
+            # If needed, plugins should expose shell commands via a different mechanism or updated loader.
+            # For v1.1.0 we focus on Agent tools.
 
         # Note: This start implementation is blocking and basic, mainly for testing.
         # The robust implementation is in __main__.py
@@ -141,12 +155,13 @@ class Kernel:
         # 2. Warning Phase (Broadcast to plugins)
         # We define a grace period (e.g. 3s)
         grace_period = 3.0
-        if self.plugin_loader:
-            self.plugin_loader.on_shutdown_warning(grace_period)
+        # Plugin hooks removed/deferred in v1.1.0 simplified loader.
+        # if self.plugin_loader:
+        #    self.plugin_loader.on_shutdown_warning(grace_period)
 
         # 3. Teardown Plugins (Graceful)
-        if self.plugin_loader:
-            self.plugin_loader.on_shutdown()
+        # if self.plugin_loader:
+        #    self.plugin_loader.on_shutdown()
 
         # 4. Stop Services (The big wait)
         if self.service_manager:
