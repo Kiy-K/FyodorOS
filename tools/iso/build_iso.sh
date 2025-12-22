@@ -13,8 +13,6 @@ if [ -f /usr/bin/isohybrid ]; then
 else
     echo "CRITICAL: isohybrid binary missing at /usr/bin/isohybrid"
 fi
-echo "Checking for xorriso..."
-which xorriso || echo "WARNING: xorriso not found!"
 echo "========================"
 
 INPUT_DIR="$1"
@@ -37,7 +35,8 @@ echo "Cleaning previous builds..."
 lb clean
 
 # Configure the live system for Ubuntu 22.04 (Jammy)
-# Using GRUB-EFI as bootloader to support modern systems
+# REVERTED to Syslinux for robust hybrid booting
+# GRUB-EFI caused isohybrid failures in this environment
 echo "Configuring live-build..."
 lb config \
     --mode ubuntu \
@@ -49,7 +48,12 @@ lb config \
     --mirror-binary "http://archive.ubuntu.com/ubuntu" \
     --bootappend-live "boot=live components quiet splash" \
     --binary-images iso-hybrid \
-    --bootloader grub-efi
+    --bootloader syslinux
+
+# CRITICAL FIX: Override the broken default theme "ubuntu-oneiric"
+# This prevents the "Unable to locate package syslinux-themes-ubuntu-oneiric" error
+echo "Patching Syslinux Theme configuration..."
+sed -i 's/LB_SYSLINUX_THEME=.*/LB_SYSLINUX_THEME="none"/' config/binary
 
 # Prepare package lists
 echo "Creating package list..."
@@ -58,12 +62,12 @@ cat <<EOF > config/package-lists/fyodor.list.chroot
 live-boot
 live-config
 live-config-systemd
-# GRUB / EFI Support
-grub-efi-amd64-bin
-grub-pc-bin
+# Bootloader Support
+syslinux
+syslinux-utils
+isolinux
 mtools
 dosfstools
-syslinux-utils
 # Python / Build
 python3-pip
 python3-full
@@ -116,7 +120,6 @@ echo "Installing FyodorOS package..."
 cd /opt/fyodoros
 
 # Install build dependencies
-# We use --break-system-packages because we are in a dedicated ISO environment
 pip install pybind11 nuitka scons --break-system-packages
 
 # CRITICAL FIX: Force compatible urllib3 for kubernetes client
@@ -156,7 +159,7 @@ cp -r /tmp/seed_home/.fyodor /etc/skel/
 # Cleanup
 rm -rf /tmp/seed_home
 
-# 4. Cleanup to reduce ISO size
+# 4. Cleanup
 apt-get clean
 
 echo "FyodorOS Installation Hook: Complete."
@@ -175,7 +178,6 @@ xset s off
 xset s noblank
 
 # Launch FyodorOS in urxvt debug terminal
-# -e runs the command. sh -c allows us to chain commands.
 urxvt -geometry 120x40 -e sh -c "/usr/local/bin/fyodor start; bash" &
 EOF
 
@@ -187,7 +189,7 @@ lb build
 
 # Post-process verification
 echo "Post-processing ISO..."
-# Check for any ISO output
+# live-build output name might vary, check common patterns
 ISO_NAME=$(ls live-image-*.iso 2>/dev/null | head -n 1)
 
 if [ -n "$ISO_NAME" ] && [ -f "$ISO_NAME" ]; then
