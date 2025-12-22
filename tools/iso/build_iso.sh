@@ -1,18 +1,12 @@
 #!/bin/bash
 set -e
 
-# FORCE PATH EXPORT to ensure /usr/bin is visible to all subprocesses
+# FORCE PATH EXPORT
 export PATH=$PATH:/usr/bin:/usr/sbin
 
 echo "=== PRE-FLIGHT CHECK ==="
-echo "PATH is: $PATH"
-echo "Checking for isohybrid..."
-which isohybrid || echo "CRITICAL: isohybrid not found in PATH!"
-if [ -f /usr/bin/isohybrid ]; then
-    ls -l /usr/bin/isohybrid
-else
-    echo "CRITICAL: isohybrid binary missing at /usr/bin/isohybrid"
-fi
+echo "Checking for xorriso..."
+which xorriso || echo "WARNING: xorriso not found (Required for GRUB ISO)!"
 echo "========================"
 
 INPUT_DIR="$1"
@@ -23,7 +17,7 @@ if [ -z "$INPUT_DIR" ] || [ -z "$OUTPUT_FILE" ]; then
     exit 1
 fi
 
-echo "Starting FyodorOS ISO build (Ubuntu 22.04 Base)..."
+echo "Starting FyodorOS ISO build (Ubuntu 22.04 / GRUB)..."
 echo "Input Directory: $INPUT_DIR"
 echo "Output File: $OUTPUT_FILE"
 
@@ -34,9 +28,8 @@ cd /build
 echo "Cleaning previous builds..."
 lb clean
 
-# Configure the live system for Ubuntu 22.04 (Jammy)
-# REVERTED to Syslinux for robust hybrid booting
-# GRUB-EFI caused isohybrid failures in this environment
+# Configure the live system
+# CRITICAL: Using GRUB-EFI. Ubuntu 22.04 handles hybrid ISOs via xorriso natively.
 echo "Configuring live-build..."
 lb config \
     --mode ubuntu \
@@ -48,12 +41,7 @@ lb config \
     --mirror-binary "http://archive.ubuntu.com/ubuntu" \
     --bootappend-live "boot=live components quiet splash" \
     --binary-images iso-hybrid \
-    --bootloader syslinux
-
-# CRITICAL FIX: Override the broken default theme "ubuntu-oneiric"
-# This prevents the "Unable to locate package syslinux-themes-ubuntu-oneiric" error
-echo "Patching Syslinux Theme configuration..."
-sed -i 's/LB_SYSLINUX_THEME=.*/LB_SYSLINUX_THEME="none"/' config/binary
+    --bootloader grub-efi
 
 # Prepare package lists
 echo "Creating package list..."
@@ -62,10 +50,10 @@ cat <<EOF > config/package-lists/fyodor.list.chroot
 live-boot
 live-config
 live-config-systemd
-# Bootloader Support
-syslinux
-syslinux-utils
-isolinux
+# GRUB / EFI Support
+grub-efi-amd64-bin
+grub-pc-bin
+grub-efi
 mtools
 dosfstools
 # Python / Build
@@ -122,10 +110,10 @@ cd /opt/fyodoros
 # Install build dependencies
 pip install pybind11 nuitka scons --break-system-packages
 
-# CRITICAL FIX: Force compatible urllib3 for kubernetes client
+# CRITICAL FIX: Force compatible urllib3
 pip install "urllib3<2.4.0" --break-system-packages
 
-# Hack: Remove EXTERNALLY-MANAGED to allow legacy setup.py install
+# Hack: Remove EXTERNALLY-MANAGED
 rm -f /usr/lib/python*/EXTERNALLY-MANAGED
 
 # 2a. Force C++ Compilation
@@ -189,7 +177,8 @@ lb build
 
 # Post-process verification
 echo "Post-processing ISO..."
-# live-build output name might vary, check common patterns
+# Note: We rely on lb build (using xorriso) to handle the hybrid boot record.
+# We do NOT run 'isohybrid' manually for GRUB images.
 ISO_NAME=$(ls live-image-*.iso 2>/dev/null | head -n 1)
 
 if [ -n "$ISO_NAME" ] && [ -f "$ISO_NAME" ]; then
