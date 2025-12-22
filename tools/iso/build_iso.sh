@@ -1,6 +1,22 @@
 #!/bin/bash
 set -e
 
+# FORCE PATH EXPORT to ensure /usr/bin is visible to all subprocesses
+export PATH=$PATH:/usr/bin:/usr/sbin
+
+echo "=== PRE-FLIGHT CHECK ==="
+echo "PATH is: $PATH"
+echo "Checking for isohybrid..."
+which isohybrid || echo "CRITICAL: isohybrid not found in PATH!"
+if [ -f /usr/bin/isohybrid ]; then
+    ls -l /usr/bin/isohybrid
+else
+    echo "CRITICAL: isohybrid binary missing at /usr/bin/isohybrid"
+fi
+echo "Checking for xorriso..."
+which xorriso || echo "WARNING: xorriso not found!"
+echo "========================"
+
 INPUT_DIR="$1"
 OUTPUT_FILE="$2"
 
@@ -21,7 +37,7 @@ echo "Cleaning previous builds..."
 lb clean
 
 # Configure the live system for Ubuntu 22.04 (Jammy)
-# UPDATED: Using GRUB-EFI as bootloader
+# Using GRUB-EFI as bootloader to support modern systems
 echo "Configuring live-build..."
 lb config \
     --mode ubuntu \
@@ -47,6 +63,7 @@ grub-efi-amd64-bin
 grub-pc-bin
 mtools
 dosfstools
+syslinux-utils
 # Python / Build
 python3-pip
 python3-full
@@ -103,7 +120,6 @@ cd /opt/fyodoros
 pip install pybind11 nuitka scons --break-system-packages
 
 # CRITICAL FIX: Force compatible urllib3 for kubernetes client
-# The python-kubernetes library often lags behind urllib3 updates
 pip install "urllib3<2.4.0" --break-system-packages
 
 # Hack: Remove EXTERNALLY-MANAGED to allow legacy setup.py install
@@ -159,6 +175,7 @@ xset s off
 xset s noblank
 
 # Launch FyodorOS in urxvt debug terminal
+# -e runs the command. sh -c allows us to chain commands.
 urxvt -geometry 120x40 -e sh -c "/usr/local/bin/fyodor start; bash" &
 EOF
 
@@ -169,10 +186,8 @@ echo "Building ISO image... This may take a while."
 lb build
 
 # Post-process verification
-# Note: lb build with iso-hybrid + grub-efi usually handles generation properly.
-# We just check existence and move.
 echo "Post-processing ISO..."
-# live-build output name might vary, check common patterns
+# Check for any ISO output
 ISO_NAME=$(ls live-image-*.iso 2>/dev/null | head -n 1)
 
 if [ -n "$ISO_NAME" ] && [ -f "$ISO_NAME" ]; then
