@@ -46,5 +46,8 @@ else
     echo "   You may be presented with a login screen on reboot."
 fi
 
+# NOTE: We intentionally DO NOT remove the 'fyodor' user or their home directory
+# to preserve user data and avoid accidental deletion of important files.
+
 echo "✅ Uninstall Complete."
 echo "   Please reboot to restore your session."
