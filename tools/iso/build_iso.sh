@@ -79,7 +79,8 @@ npm run build
 echo "Building Tauri Backend (Cargo)..."
 # We bypass 'tauri build' to avoid bundling issues (deb/appimage failures in Docker).
 cd src-tauri
-cargo build --release
+# Enable custom-protocol feature for production build (standard Tauri behavior)
+cargo build --release --features custom-protocol
 cd ..
 
 # Verify artifact
