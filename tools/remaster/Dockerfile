@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     python3-dev \
     patchelf \
+    grub-efi-amd64-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 22.x (Required for Vite 7+)

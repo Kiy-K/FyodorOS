@@ -301,9 +301,20 @@ if [ -z "$EFI_IMG_PATH" ]; then
     if [ -f "$EXTRACT_DIR/boot/grub/efi.img" ]; then
         EFI_IMG_REL="boot/grub/efi.img"
     else
-        echo "Error: Critical Boot Image 'efi.img' missing."
-        ls -R "$EXTRACT_DIR/boot"
-        exit 1
+        echo "Warning: Critical Boot Image 'efi.img' missing. Generating it..."
+        # Ensure directory exists
+        mkdir -p "$EXTRACT_DIR/boot/grub"
+        # Generate EFI image
+        grub-mkimage -O x86_64-efi -o "$EXTRACT_DIR/boot/grub/efi.img" \
+            -p /boot/grub \
+            part_gpt part_msdos fat iso9660
+        EFI_IMG_REL="boot/grub/efi.img"
+
+        if [ ! -f "$EXTRACT_DIR/boot/grub/efi.img" ]; then
+             echo "Error: Failed to generate efi.img"
+             exit 1
+        fi
+        echo "Generated efi.img at $EFI_IMG_REL"
     fi
 else
     # Make relative to EXTRACT_DIR
