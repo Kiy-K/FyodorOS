@@ -111,8 +111,11 @@ else
 fi
 
 echo "Extracting ISO contents..."
-# 7z provides a reliable extraction for ISOs
-7z x "$ISO_NAME" -o"$EXTRACT_DIR"
+# Use xorriso to extract everything including hidden boot images
+xorriso -osirrox on -indev "$ISO_NAME" -extract / "$EXTRACT_DIR"
+
+# Fix permissions to ensure xorriso can read everything later
+chmod -R +rw "$EXTRACT_DIR"
 
 echo "Locating Root Filesystem..."
 # Server ISO usually has ubuntu-server-minimal.squashfs, checking locations
@@ -284,30 +287,73 @@ find . -type f -print0 | xargs -0 md5sum > md5sum.txt
 echo "Building Hybrid ISO..."
 cd "$WORK_DIR"
 
-# Flags as requested for Hybrid MBR/EFI
-# Note: We need to point -b and -e to relative paths in the extracted dir.
-# Ubuntu Server ISO usually has 'boot/grub/efi.img'.
-# If 'boot/grub/i386-pc/eltorito.img' is missing, we might need to extract it or use isolinux.
-# However, standard Ubuntu 22.04 uses GRUB for both.
-# Let's verify presence or copy from system if missing (xorriso can generate it, but we want "Original").
-# Since we just extracted the ISO, we assume the boot images are inside.
+# Dynamic Boot Image Discovery
+echo "Locating Boot Images..."
+# Debug listing
+find "$EXTRACT_DIR/boot" -maxdepth 4 -name "*.img" || echo "No .img files in boot/"
 
-# If eltorito.img is not extracted (sometimes it's hidden), we can't point to it.
-# However, xorriso -extract usually dumps everything.
-# Let's check if the specific boot images exist in the extracted structure.
-# If not, we might need to rely on xorriso generating them, but the prompt says "Original".
-# Usually, standard Ubuntu ISOs have `boot/grub/efi.img`. The BIOS image is often `isolinux/isolinux.bin`
-# or `boot/grub/i386-pc/eltorito.img` depending on the build.
-# For this script, we will try to use the paths specified. If they fail, we rely on xorriso defaults (not implemented here to keep strict).
+EFI_IMG_PATH=$(find "$EXTRACT_DIR" -name "efi.img" | head -n 1)
+ELTORITO_IMG_PATH=$(find "$EXTRACT_DIR" -name "eltorito.img" | head -n 1)
+
+# Fallbacks for standard Ubuntu paths if find fails (relative to extract dir)
+if [ -z "$EFI_IMG_PATH" ]; then
+    echo "Warning: efi.img not found via find. Checking standard path..."
+    if [ -f "$EXTRACT_DIR/boot/grub/efi.img" ]; then
+        EFI_IMG_REL="boot/grub/efi.img"
+    else
+        echo "Error: Critical Boot Image 'efi.img' missing."
+        ls -R "$EXTRACT_DIR/boot"
+        exit 1
+    fi
+else
+    # Make relative to EXTRACT_DIR
+    EFI_IMG_REL=${EFI_IMG_PATH#$EXTRACT_DIR/}
+    # Remove leading slash if present
+    EFI_IMG_REL=${EFI_IMG_REL#/}
+fi
+
+# Ensure EFI image is a file, not a symlink (xorriso requirement for -e sometimes)
+if [ -L "$EXTRACT_DIR/$EFI_IMG_REL" ]; then
+    echo "Resolving symlink for EFI Image..."
+    cp --remove-destination "$(realpath "$EXTRACT_DIR/$EFI_IMG_REL")" "$EXTRACT_DIR/$EFI_IMG_REL"
+fi
+
+if [ -z "$ELTORITO_IMG_PATH" ]; then
+    echo "Warning: eltorito.img not found via find. Checking standard path..."
+    if [ -f "$EXTRACT_DIR/boot/grub/i386-pc/eltorito.img" ]; then
+        ELTORITO_IMG_REL="boot/grub/i386-pc/eltorito.img"
+    else
+        echo "Error: Critical Boot Image 'eltorito.img' missing."
+        exit 1
+    fi
+else
+    # Make relative
+    ELTORITO_IMG_REL=${ELTORITO_IMG_PATH#$EXTRACT_DIR/}
+    ELTORITO_IMG_REL=${ELTORITO_IMG_REL#/}
+fi
+
+# Ensure El Torito image is a file
+if [ -L "$EXTRACT_DIR/$ELTORITO_IMG_REL" ]; then
+    echo "Resolving symlink for El Torito Image..."
+    cp --remove-destination "$(realpath "$EXTRACT_DIR/$ELTORITO_IMG_REL")" "$EXTRACT_DIR/$ELTORITO_IMG_REL"
+fi
+
+echo "Using EFI Image: $EFI_IMG_REL"
+ls -l "$EXTRACT_DIR/$EFI_IMG_REL"
+file "$EXTRACT_DIR/$EFI_IMG_REL"
+
+echo "Using El Torito Image: $ELTORITO_IMG_REL"
+ls -l "$EXTRACT_DIR/$ELTORITO_IMG_REL"
+file "$EXTRACT_DIR/$ELTORITO_IMG_REL"
 
 xorriso -as mkisofs \
-  -r -V "LooP OS 22.04" \
+  -r -V "LooP_OS_22.04" \
   -J -joliet-long \
-  -b boot/grub/i386-pc/eltorito.img \
+  -b "$ELTORITO_IMG_REL" \
   -no-emul-boot -boot-load-size 4 -boot-info-table \
   --grub2-boot-info \
   -eltorito-alt-boot \
-  -e boot/grub/efi.img \
+  -e "$EFI_IMG_REL" \
   -no-emul-boot -isohybrid-gpt-basdat \
   -o "$OUTPUT_FILE" \
   "$EXTRACT_DIR"
