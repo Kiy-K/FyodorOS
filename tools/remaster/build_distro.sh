@@ -143,7 +143,13 @@ chmod +x "$CHROOT_DIR/usr/local/bin/loop-desktop"
 # 2. Inject Source Code (Temporary Location)
 echo "Injecting Source Code..."
 mkdir -p "$CHROOT_DIR/tmp/loop_source"
-cp -a "$INPUT_DIR"/. "$CHROOT_DIR/tmp/loop_source/"
+# cp -r is safer than cp -a for cross-filesystem copies in docker mounts
+cp -r "$INPUT_DIR"/. "$CHROOT_DIR/tmp/loop_source/"
+if [ ! -f "$CHROOT_DIR/tmp/loop_source/pyproject.toml" ]; then
+    echo "Error: pyproject.toml not found in injected source!"
+    ls -la "$CHROOT_DIR/tmp/loop_source/"
+    exit 1
+fi
 
 # 3. Inject Installer Script (Copy for explicit reference if needed, but we use in-source)
 echo "Injecting Installer Script..."
@@ -228,6 +234,8 @@ echo "--> Installing LooP Core & GUI Stack..."
 # We skip the "check for root" because we are root in chroot.
 # CRITICAL: We MUST be inside the source directory for the script to detect pyproject.toml
 cd /tmp/loop_source
+echo "DEBUG: Current Directory in Chroot: \$(pwd)"
+ls -la
 ./install/setup_loop.sh
 
 echo "--> Installing Live Boot Components (CRITICAL)..."
