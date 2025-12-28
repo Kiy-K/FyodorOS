@@ -25,7 +25,8 @@ RUN pacman -Syu --noconfirm && \
     cargo \
     webkit2gtk \
     openssl \
-    squashfs-tools
+    squashfs-tools \
+    patchelf
 
 # Install pnpm via npm to ensure availability
 RUN npm install -g pnpm
