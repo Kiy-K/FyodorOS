@@ -37,9 +37,15 @@ cd "$COMPILE_DIR"
 
 # 1. Compile Kernel (Nuitka)
 echo "--> Compiling Kernel..."
+
+# Fix: Unpin Playwright to allow compatibility with Arch's Python 3.13
+# The pinned version (1.41.2) pulls in older greenlet/compilation issues on Py3.13
+sed -i 's/playwright==1.41.2/playwright/g' pyproject.toml
+
 # Install deps if needed (assuming image has them or we install minimal)
 # We install '.' to get dependencies and ensure 'loop' is in path
-pip install . --break-system-packages
+# Use --no-build-isolation to prefer system packages (like python-greenlet)
+pip install . --break-system-packages --no-build-isolation
 
 python -m nuitka --standalone --onefile \
     --output-filename=loop-kernel \
